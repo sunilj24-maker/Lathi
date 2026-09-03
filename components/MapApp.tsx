@@ -33,6 +33,12 @@ type RouteResponse = {
   };
 };
 
+type PointFeature = {
+  lon: number;
+  lat: number;
+  properties: FeatureProps & { notes?: string };
+};
+
 type AcademicGj = {
   type: "FeatureCollection";
   features: {
@@ -56,6 +62,7 @@ export default function MapApp() {
   const mapRef = useRef<MapRef>(null);
   const [places, setPlaces] = useState<Place[]>([]);
   const [academic, setAcademic] = useState<AcademicGj | null>(null);
+  const [pointFeatures, setPointFeatures] = useState<PointFeature[]>([]);
   const [from, setFrom] = useState<Place | null>(null);
   const [to, setTo] = useState<Place | null>(null);
   const [profile, setProfile] = useState<ProfileId>("wheelchair");
@@ -90,9 +97,30 @@ export default function MapApp() {
     Promise.all([
       fetch("/data/places.json").then((r) => r.json()) as Promise<Place[]>,
       fetch("/data/academic-area.geojson").then((r) => r.json()) as Promise<AcademicGj>,
-    ]).then(([p, a]) => {
+      fetch("/data/features.geojson").then((r) => r.json()) as Promise<{
+        features: {
+          geometry: { type: string; coordinates: number[] };
+          properties: FeatureProps & { notes?: string; tags?: string };
+        }[];
+      }>,
+    ]).then(([p, a, feats]) => {
       setPlaces(p);
       setAcademic(a);
+      setPointFeatures(
+        feats.features
+          .filter((f) => f.geometry.type === "Point")
+          .map((f) => {
+            const tags =
+              typeof f.properties.tags === "string"
+                ? (JSON.parse(f.properties.tags) as Record<string, string>)
+                : {};
+            return {
+              lon: f.geometry.coordinates[0],
+              lat: f.geometry.coordinates[1],
+              properties: { ...f.properties, tags },
+            };
+          }),
+      );
     });
   }, []);
 
@@ -149,7 +177,7 @@ export default function MapApp() {
   }, [from, to, profile, routeKey]);
 
   const onClick = useCallback((e: MapLayerMouseEvent) => {
-    const layerIds = ["features-circle-hit", "features-circle", "features-line"];
+    const layerIds = ["features-line"];
     const map = mapRef.current?.getMap();
     const existing = layerIds.filter((id) => Boolean(map?.getLayer(id)));
     const queried =
@@ -195,7 +223,7 @@ export default function MapApp() {
           CAMPUS_BBOX.east,
           CAMPUS_BBOX.north,
         ]}
-        interactiveLayerIds={["features-circle-hit", "features-circle", "features-line"]}
+        interactiveLayerIds={["features-line"]}
         onClick={onClick}
         attributionControl={{ compact: true }}
         style={{ width: "100%", height: "100%" }}
@@ -242,46 +270,27 @@ export default function MapApp() {
                 "line-width": 5,
               }}
             />
-            <Layer
-              id="features-circle"
-              type="circle"
-              filter={["==", "$type", "Point"]}
-              paint={{
-                "circle-radius": 10,
-                "circle-stroke-width": 1,
-                "circle-stroke-color": "#ffffff",
-                "circle-color": [
-                  "match",
-                  ["get", "kind"],
-                  "ramp",
-                  KIND_COLOR.ramp,
-                  "stairs",
-                  KIND_COLOR.stairs,
-                  "crossing",
-                  KIND_COLOR.crossing,
-                  "elevator",
-                  KIND_COLOR.elevator,
-                  "entrance",
-                  KIND_COLOR.entrance,
-                  "bench",
-                  KIND_COLOR.bench,
-                  "rest_area",
-                  KIND_COLOR.rest_area,
-                  KIND_COLOR.other,
-                ],
-              }}
-            />
-            <Layer
-              id="features-circle-hit"
-              type="circle"
-              filter={["==", "$type", "Point"]}
-              paint={{
-                "circle-radius": 16,
-                "circle-opacity": 0,
-                "circle-color": "#000000",
-              }}
-            />
           </Source>
+        {pointFeatures.map((pt) => (
+          <Marker
+            key={pt.properties.osmId}
+            longitude={pt.lon}
+            latitude={pt.lat}
+            anchor="center"
+            onClick={(e) => {
+              e.originalEvent.stopPropagation();
+              setPopup({ lon: pt.lon, lat: pt.lat, properties: pt.properties });
+            }}
+          >
+            <button
+              type="button"
+              aria-label={pt.properties.kind}
+              title={pt.properties.name || pt.properties.kind}
+              className="h-3.5 w-3.5 rounded-full border-2 border-white shadow-md"
+              style={{ background: KIND_COLOR[pt.properties.kind] ?? KIND_COLOR.other }}
+            />
+          </Marker>
+        ))}
         <Source id="route" type="geojson" data={routeFc}>
           <Layer
             id="route-line"
