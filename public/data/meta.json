@@ -1,0 +1,22 @@
+{
+  "builtAt": "2026-09-03T17:45:13.865Z",
+  "osmFetchedAt": "2026-09-03T17:45:12.479Z",
+  "graph": {
+    "nodes": 6443,
+    "edges": 7078,
+    "ways": 1367
+  },
+  "buildings": 575,
+  "namedBuildings": 167,
+  "features": 110,
+  "featureKinds": {
+    "entrance": 79,
+    "crossing": 4,
+    "drinking_water": 4,
+    "toilets": 10,
+    "other": 2,
+    "skywalk": 6,
+    "stairs": 5
+  },
+  "places": 295
+}
