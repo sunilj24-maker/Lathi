@@ -1,11 +1,28 @@
-# Lathi
-# IITK Accessible — Frozen MVP Plan
+# Lathi — IITK Accessible
 
 Accessibility-aware navigation for IIT Kanpur. The website shows the whole IITK
 campus as a base map, but the detailed accessibility layer and routing cover
 only the **Academic Area**. Users pick From, To, and an accessibility profile
 (Normal / Wheelchair first) and get the most *suitable* route, not just the
 shortest one.
+
+## Run locally
+
+```bash
+npm install
+npm run data:fetch    # OSM campus snapshot → data/raw/iitk.osm.json
+npm run data:build    # graph + GeoJSON + places
+npm test
+npm run dev           # http://localhost:3000
+```
+
+Deploy the GitHub repo to Vercel (Hobby). Basemap tiles are OpenStreetMap raster (attribution on the map).
+
+Map data © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors, ODbL.
+
+---
+
+# Frozen MVP Plan
 
 Team: 3 people. Timeline: ~1 month. Budget: free tiers only.
 
