@@ -33,15 +33,6 @@ type RouteResponse = {
   };
 };
 
-type FeatureGj = {
-  type: "FeatureCollection";
-  features: {
-    type: "Feature";
-    properties: FeatureProps & { notes?: string };
-    geometry: { type: string; coordinates: number[] | number[][] };
-  }[];
-};
-
 type AcademicGj = {
   type: "FeatureCollection";
   features: {
@@ -64,7 +55,6 @@ const KIND_COLOR: Record<string, string> = {
 export default function MapApp() {
   const mapRef = useRef<MapRef>(null);
   const [places, setPlaces] = useState<Place[]>([]);
-  const [features, setFeatures] = useState<FeatureGj | null>(null);
   const [academic, setAcademic] = useState<AcademicGj | null>(null);
   const [from, setFrom] = useState<Place | null>(null);
   const [to, setTo] = useState<Place | null>(null);
@@ -99,11 +89,9 @@ export default function MapApp() {
   useEffect(() => {
     Promise.all([
       fetch("/data/places.json").then((r) => r.json()) as Promise<Place[]>,
-      fetch("/data/features.geojson").then((r) => r.json()) as Promise<FeatureGj>,
       fetch("/data/academic-area.geojson").then((r) => r.json()) as Promise<AcademicGj>,
-    ]).then(([p, f, a]) => {
+    ]).then(([p, a]) => {
       setPlaces(p);
-      setFeatures(f);
       setAcademic(a);
     });
   }, []);
@@ -222,7 +210,7 @@ export default function MapApp() {
           </Source>
         )}
         {academic && (
-          <Source id="academic" type="geojson" data={academic as unknown as GeoJSON.GeoJSON}>
+          <Source id="academic" type="geojson" data="/data/academic-area.geojson">
             <Layer
               id="academic-line"
               type="line"
@@ -234,12 +222,11 @@ export default function MapApp() {
             />
           </Source>
         )}
-        {features && (
-          <Source id="features" type="geojson" data={features as unknown as GeoJSON.GeoJSON}>
+        <Source id="features" type="geojson" data="/data/features.geojson">
             <Layer
               id="features-line"
               type="line"
-              filter={["==", ["geometry-type"], "LineString"]}
+              filter={["==", "$type", "LineString"]}
               paint={{
                 "line-color": [
                   "match",
@@ -258,9 +245,9 @@ export default function MapApp() {
             <Layer
               id="features-circle"
               type="circle"
-              filter={["==", ["geometry-type"], "Point"]}
+              filter={["==", "$type", "Point"]}
               paint={{
-                "circle-radius": 7,
+                "circle-radius": 10,
                 "circle-stroke-width": 1,
                 "circle-stroke-color": "#ffffff",
                 "circle-color": [
@@ -287,7 +274,7 @@ export default function MapApp() {
             <Layer
               id="features-circle-hit"
               type="circle"
-              filter={["==", ["geometry-type"], "Point"]}
+              filter={["==", "$type", "Point"]}
               paint={{
                 "circle-radius": 16,
                 "circle-opacity": 0,
@@ -295,7 +282,6 @@ export default function MapApp() {
               }}
             />
           </Source>
-        )}
         <Source id="route" type="geojson" data={routeFc}>
           <Layer
             id="route-line"
