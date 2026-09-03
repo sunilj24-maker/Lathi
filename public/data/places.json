@@ -1,0 +1,513 @@
+[
+  {
+    "id": "way/268050287",
+    "name": "Academic Affairs Building (JEE/GATE)",
+    "lat": 26.51466635,
+    "lon": 80.23131983333333,
+    "kind": "building",
+    "osmId": "way/268050287"
+  },
+  {
+    "id": "way/315780946",
+    "name": "ACES",
+    "lat": 26.513012228571426,
+    "lon": 80.23211431428572,
+    "kind": "building",
+    "osmId": "way/315780946"
+  },
+  {
+    "id": "way/268061984",
+    "name": "Advanced Centre For Materials Science",
+    "lat": 26.51149805882353,
+    "lon": 80.23135179411763,
+    "kind": "building",
+    "osmId": "way/268061984"
+  },
+  {
+    "id": "way/1135346535",
+    "name": "Atmospheric Monitoring Station",
+    "lat": 26.515233783333333,
+    "lon": 80.23481466666667,
+    "kind": "building",
+    "osmId": "way/1135346535"
+  },
+  {
+    "id": "way/268050281",
+    "name": "Cafe Coffee Day",
+    "lat": 26.51199302,
+    "lon": 80.23428645999999,
+    "kind": "building",
+    "osmId": "way/268050281"
+  },
+  {
+    "id": "way/1131619521",
+    "name": "Campus D Shop",
+    "lat": 26.511777659999996,
+    "lon": 80.23593136,
+    "kind": "building",
+    "osmId": "way/1131619521"
+  },
+  {
+    "id": "node/1656958496",
+    "name": "Campus Restaurant",
+    "lat": 26.5115503,
+    "lon": 80.236353,
+    "kind": "landmark",
+    "osmId": "node/1656958496"
+  },
+  {
+    "id": "way/268050288",
+    "name": "Central Workshop",
+    "lat": 26.51415177142857,
+    "lon": 80.23121945714286,
+    "kind": "building",
+    "osmId": "way/268050288"
+  },
+  {
+    "id": "way/315780949",
+    "name": "Civil Engineering Lab",
+    "lat": 26.513013400000002,
+    "lon": 80.23133749999998,
+    "kind": "building",
+    "osmId": "way/315780949"
+  },
+  {
+    "id": "way/501658530",
+    "name": "Computer Center Canteen",
+    "lat": 26.514111179999997,
+    "lon": 80.234284245,
+    "kind": "building",
+    "osmId": "way/501658530"
+  },
+  {
+    "id": "way/157018921",
+    "name": "Computer Centre",
+    "lat": 26.51366724,
+    "lon": 80.23438676,
+    "kind": "building",
+    "osmId": "way/157018921"
+  },
+  {
+    "id": "way/268050283",
+    "name": "Core Lab",
+    "lat": 26.513644614285713,
+    "lon": 80.23257154285714,
+    "kind": "building",
+    "osmId": "way/268050283"
+  },
+  {
+    "id": "way/268050285",
+    "name": "Department of Chemical Engineering (Northern Block Laboratories 2)",
+    "lat": 26.514624857142852,
+    "lon": 80.23236892857143,
+    "kind": "building",
+    "osmId": "way/268050285"
+  },
+  {
+    "id": "way/1131994409",
+    "name": "Department of Sustainable Energy Engineering",
+    "lat": 26.510127733333334,
+    "lon": 80.23584448888889,
+    "kind": "building",
+    "osmId": "way/1131994409"
+  },
+  {
+    "id": "way/268050286",
+    "name": "DOAA Canteen",
+    "lat": 26.514415874999997,
+    "lon": 80.23179234499999,
+    "kind": "building",
+    "osmId": "way/268050286"
+  },
+  {
+    "id": "way/1158746039",
+    "name": "Electric Substation No 1",
+    "lat": 26.512056660000002,
+    "lon": 80.23034834,
+    "kind": "building",
+    "osmId": "way/1158746039"
+  },
+  {
+    "id": "way/1104867049",
+    "name": "Engineering Science Building 2",
+    "lat": 26.515413239999997,
+    "lon": 80.23308963999999,
+    "kind": "building",
+    "osmId": "way/1104867049"
+  },
+  {
+    "id": "node/10605449475",
+    "name": "Entrance",
+    "lat": 26.509699,
+    "lon": 80.2326588,
+    "kind": "entrance",
+    "osmId": "node/10605449475",
+    "nodeId": "10605449475"
+  },
+  {
+    "id": "way/268050280",
+    "name": "Faculty Building",
+    "lat": 26.512999214285713,
+    "lon": 80.23316574285715,
+    "kind": "building",
+    "osmId": "way/268050280"
+  },
+  {
+    "id": "way/1060146288",
+    "name": "Faculty Building Annexe",
+    "lat": 26.51229652,
+    "lon": 80.2349693,
+    "kind": "building",
+    "osmId": "way/1060146288"
+  },
+  {
+    "id": "node/10537340887",
+    "name": "Gupta Shake and Icecream Shop",
+    "lat": 26.5093362,
+    "lon": 80.2325609,
+    "kind": "landmark",
+    "osmId": "node/10537340887"
+  },
+  {
+    "id": "way/488149102",
+    "name": "H.R. Kadim Diwan Building",
+    "lat": 26.514049033333336,
+    "lon": 80.23477853518517,
+    "kind": "building",
+    "osmId": "way/488149102"
+  },
+  {
+    "id": "way/1465113052",
+    "name": "House 1",
+    "lat": 26.5152248,
+    "lon": 80.2315462,
+    "kind": "building",
+    "osmId": "way/1465113052"
+  },
+  {
+    "id": "way/1161063538",
+    "name": "Hypersonic Experimental Aerodynamics Lab",
+    "lat": 26.51526856,
+    "lon": 80.23204971999999,
+    "kind": "building",
+    "osmId": "way/1161063538"
+  },
+  {
+    "id": "way/315782323",
+    "name": "Industrial & Management Engineering",
+    "lat": 26.51467451538462,
+    "lon": 80.23333713076923,
+    "kind": "building",
+    "osmId": "way/315782323"
+  },
+  {
+    "id": "way/432740283",
+    "name": "Kislaya Nursery School",
+    "lat": 26.51019894,
+    "lon": 80.2367045,
+    "kind": "building",
+    "osmId": "way/432740283"
+  },
+  {
+    "id": "way/1143854839",
+    "name": "Lecture Hall 1",
+    "lat": 26.511195728571433,
+    "lon": 80.23280384285714,
+    "kind": "building",
+    "osmId": "way/1143854839"
+  },
+  {
+    "id": "node/2734116498",
+    "name": "Lecture Hall 1 entrance",
+    "lat": 26.5109347,
+    "lon": 80.2325777,
+    "kind": "entrance",
+    "osmId": "node/2734116498",
+    "nodeId": "2734116498"
+  },
+  {
+    "id": "way/1143854843",
+    "name": "Lecture Hall 14",
+    "lat": 26.511025975,
+    "lon": 80.23317983749999,
+    "kind": "building",
+    "osmId": "way/1143854843"
+  },
+  {
+    "id": "way/1143854844",
+    "name": "Lecture Hall 15",
+    "lat": 26.510897857142854,
+    "lon": 80.23333448571428,
+    "kind": "building",
+    "osmId": "way/1143854844"
+  },
+  {
+    "id": "way/1137755507",
+    "name": "Lecture Hall 16",
+    "lat": 26.5107166,
+    "lon": 80.23341867142857,
+    "kind": "building",
+    "osmId": "way/1137755507"
+  },
+  {
+    "id": "way/1137755508",
+    "name": "Lecture Hall 17",
+    "lat": 26.51072243333334,
+    "lon": 80.23369100000001,
+    "kind": "building",
+    "osmId": "way/1137755508"
+  },
+  {
+    "id": "way/1143854840",
+    "name": "Lecture Hall 2",
+    "lat": 26.511181116666666,
+    "lon": 80.2329788,
+    "kind": "building",
+    "osmId": "way/1143854840"
+  },
+  {
+    "id": "way/1143854841",
+    "name": "Lecture Hall 3",
+    "lat": 26.511393233333333,
+    "lon": 80.23319948333334,
+    "kind": "building",
+    "osmId": "way/1143854841"
+  },
+  {
+    "id": "way/1143854842",
+    "name": "Lecture Hall 4",
+    "lat": 26.511538099999996,
+    "lon": 80.23319178333334,
+    "kind": "building",
+    "osmId": "way/1143854842"
+  },
+  {
+    "id": "way/1143854837",
+    "name": "Lecture Hall 5",
+    "lat": 26.51153102,
+    "lon": 80.23261693999999,
+    "kind": "building",
+    "osmId": "way/1143854837"
+  },
+  {
+    "id": "way/1143854838",
+    "name": "Lecture Hall 6",
+    "lat": 26.511392333333333,
+    "lon": 80.23260186666667,
+    "kind": "building",
+    "osmId": "way/1143854838"
+  },
+  {
+    "id": "node/13657840007",
+    "name": "Lecture Hall 6 main entrance",
+    "lat": 26.511141,
+    "lon": 80.2323882,
+    "kind": "entrance",
+    "osmId": "node/13657840007",
+    "nodeId": "13657840007"
+  },
+  {
+    "id": "node/13657840088",
+    "name": "Lecture Hall 6 main entrance",
+    "lat": 26.511141,
+    "lon": 80.2323882,
+    "kind": "entrance",
+    "osmId": "node/13657840088",
+    "nodeId": "13657840088"
+  },
+  {
+    "id": "way/1143854836",
+    "name": "Lecture Hall 7",
+    "lat": 26.5116976,
+    "lon": 80.23287224999999,
+    "kind": "building",
+    "osmId": "way/1143854836"
+  },
+  {
+    "id": "way/157018922",
+    "name": "Main Auditorium",
+    "lat": 26.513102333333332,
+    "lon": 80.23615065555555,
+    "kind": "building",
+    "osmId": "way/157018922"
+  },
+  {
+    "id": "node/10605449473",
+    "name": "Main entrance",
+    "lat": 26.5106073,
+    "lon": 80.230661,
+    "kind": "entrance",
+    "osmId": "node/10605449473",
+    "nodeId": "10605449473"
+  },
+  {
+    "id": "node/10605449474",
+    "name": "Main entrance",
+    "lat": 26.5094632,
+    "lon": 80.2308368,
+    "kind": "entrance",
+    "osmId": "node/10605449474",
+    "nodeId": "10605449474"
+  },
+  {
+    "id": "node/10605449494",
+    "name": "Main entrance",
+    "lat": 26.509186,
+    "lon": 80.2328036,
+    "kind": "entrance",
+    "osmId": "node/10605449494",
+    "nodeId": "10605449494"
+  },
+  {
+    "id": "way/1131622792",
+    "name": "National Centre for Flexible Electronics",
+    "lat": 26.511963457142855,
+    "lon": 80.23107807142857,
+    "kind": "building",
+    "osmId": "way/1131622792"
+  },
+  {
+    "id": "way/1135339096",
+    "name": "New Lecture Hall Complex",
+    "lat": 26.51076105652174,
+    "lon": 80.2338450173913,
+    "kind": "building",
+    "osmId": "way/1135339096"
+  },
+  {
+    "id": "way/268050284",
+    "name": "Northern Block Laboratories",
+    "lat": 26.51402912857143,
+    "lon": 80.23347374285713,
+    "kind": "building",
+    "osmId": "way/268050284"
+  },
+  {
+    "id": "way/315782325",
+    "name": "Nuclear Physics Lab",
+    "lat": 26.514456999999997,
+    "lon": 80.23402407272728,
+    "kind": "building",
+    "osmId": "way/315782325"
+  },
+  {
+    "id": "way/268050278",
+    "name": "Old Lecture Hall Complex",
+    "lat": 26.511250042105257,
+    "lon": 80.23310944736842,
+    "kind": "building",
+    "osmId": "way/268050278"
+  },
+  {
+    "id": "way/1090937351",
+    "name": "Outreach Auditorium",
+    "lat": 26.5091643,
+    "lon": 80.23455304,
+    "kind": "building",
+    "osmId": "way/1090937351"
+  },
+  {
+    "id": "way/488149101",
+    "name": "Rajeev Motwani Building",
+    "lat": 26.51435224,
+    "lon": 80.23492722,
+    "kind": "building",
+    "osmId": "way/488149101"
+  },
+  {
+    "id": "way/315780951",
+    "name": "Samtel Centre for Display Technologies",
+    "lat": 26.5117878125,
+    "lon": 80.23206338749999,
+    "kind": "building",
+    "osmId": "way/315780951"
+  },
+  {
+    "id": "node/10543460628",
+    "name": "Sankat Mochan Hanuman Temple",
+    "lat": 26.5122324,
+    "lon": 80.2305242,
+    "kind": "landmark",
+    "osmId": "node/10543460628"
+  },
+  {
+    "id": "way/1131208303",
+    "name": "Security Control Room",
+    "lat": 26.5116698,
+    "lon": 80.23043437999999,
+    "kind": "building",
+    "osmId": "way/1131208303"
+  },
+  {
+    "id": "way/268050282",
+    "name": "Southern Labs",
+    "lat": 26.51174271666667,
+    "lon": 80.23467319999999,
+    "kind": "building",
+    "osmId": "way/268050282"
+  },
+  {
+    "id": "node/3277783199",
+    "name": "Southern Labs Canteen",
+    "lat": 26.5117899,
+    "lon": 80.2342909,
+    "kind": "landmark",
+    "osmId": "node/3277783199"
+  },
+  {
+    "id": "way/1486428403",
+    "name": "Starbucks",
+    "lat": 26.510779120000002,
+    "lon": 80.23486718000001,
+    "kind": "building",
+    "osmId": "way/1486428403"
+  },
+  {
+    "id": "way/1137756293",
+    "name": "State Bank of India",
+    "lat": 26.511688414285718,
+    "lon": 80.23671344285715,
+    "kind": "building",
+    "osmId": "way/1137756293"
+  },
+  {
+    "id": "node/13331574826",
+    "name": "Subway",
+    "lat": 26.5108802,
+    "lon": 80.2348596,
+    "kind": "landmark",
+    "osmId": "node/13331574826"
+  },
+  {
+    "id": "node/1656958499",
+    "name": "Union Bank of India",
+    "lat": 26.5112702,
+    "lon": 80.2363169,
+    "kind": "landmark",
+    "osmId": "node/1656958499"
+  },
+  {
+    "id": "way/315780953",
+    "name": "Western Lab Extension",
+    "lat": 26.513084780000003,
+    "lon": 80.23170264000001,
+    "kind": "building",
+    "osmId": "way/315780953"
+  },
+  {
+    "id": "way/268061985",
+    "name": "Western Labs",
+    "lat": 26.512260500000004,
+    "lon": 80.23162116666667,
+    "kind": "building",
+    "osmId": "way/268061985"
+  },
+  {
+    "id": "way/1135339093",
+    "name": "Workshop",
+    "lat": 26.51403402222222,
+    "lon": 80.23168784444442,
+    "kind": "building",
+    "osmId": "way/1135339093"
+  }
+]

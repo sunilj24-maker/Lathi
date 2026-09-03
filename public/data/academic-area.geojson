@@ -1,0 +1,30 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "IITK Academic Area",
+        "note": "Hand-drawn coverage polygon around the academic core (labs, LHC, Faculty Building, auditorium). Refine after the first survey pass."
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [80.2307, 26.5093],
+            [80.2328, 26.5089],
+            [80.2355, 26.5091],
+            [80.2373, 26.5102],
+            [80.2376, 26.5124],
+            [80.237, 26.5148],
+            [80.2342, 26.5155],
+            [80.2314, 26.5154],
+            [80.2303, 26.5138],
+            [80.2302, 26.5116],
+            [80.2307, 26.5093]
+          ]
+        ]
+      }
+    }
+  ]
+}
