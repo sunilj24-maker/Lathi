@@ -76,6 +76,24 @@ function centroid(ids: number[], nodes: Map<number, OsmNode>): { lat: number; lo
   return { lat: lat / n, lon: lon / n };
 }
 
+function featureProps(
+  osmId: string,
+  kind: FeatureProps["kind"],
+  tags: Record<string, string>,
+  extra: { photo?: string; notes?: string; check_date?: string },
+): Record<string, string> {
+  // MapLibre only accepts primitive property values.
+  return {
+    osmId,
+    kind,
+    name: tags.name ?? "",
+    check_date: extra.check_date ?? tags.check_date ?? "",
+    notes: extra.notes ?? "",
+    photo: extra.photo ?? "",
+    tags: JSON.stringify(tags),
+  };
+}
+
 function nearestNamed(
   lat: number,
   lon: number,
@@ -170,7 +188,7 @@ function main() {
 
   type GjFeature = {
     type: "Feature";
-    properties: FeatureProps & Record<string, unknown>;
+    properties: Record<string, string>;
     geometry: { type: "Point" | "LineString"; coordinates: number[] | number[][] };
   };
   const features: GjFeature[] = [];
@@ -184,15 +202,7 @@ function main() {
     const extra = overrides[osmId] ?? {};
     features.push({
       type: "Feature",
-      properties: {
-        osmId,
-        kind,
-        name: tags.name,
-        check_date: extra.check_date ?? tags.check_date,
-        tags,
-        notes: extra.notes,
-        photo: extra.photo,
-      },
+      properties: featureProps(osmId, kind, tags, extra),
       geometry: { type: "Point", coordinates: [node.lon, node.lat] },
     });
   }
@@ -210,15 +220,7 @@ function main() {
     const extra = overrides[osmId] ?? {};
     features.push({
       type: "Feature",
-      properties: {
-        osmId,
-        kind,
-        name: tags.name,
-        check_date: extra.check_date ?? tags.check_date,
-        tags,
-        notes: extra.notes,
-        photo: extra.photo,
-      },
+      properties: featureProps(osmId, kind, tags, extra),
       geometry: { type: "LineString", coordinates: coords },
     });
   }
