@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Map, { Layer, Marker, Popup, Source } from "react-map-gl/maplibre";
-import type { MapLayerMouseEvent } from "react-map-gl/maplibre";
+import type { MapLayerMouseEvent, MapRef } from "react-map-gl/maplibre";
 import "maplibre-gl/dist/maplibre-gl.css";
 import {
   ACADEMIC_AREA_CENTER,
@@ -62,6 +62,7 @@ const KIND_COLOR: Record<string, string> = {
 };
 
 export default function MapApp() {
+  const mapRef = useRef<MapRef>(null);
   const [places, setPlaces] = useState<Place[]>([]);
   const [features, setFeatures] = useState<FeatureGj | null>(null);
   const [academic, setAcademic] = useState<AcademicGj | null>(null);
@@ -160,12 +161,23 @@ export default function MapApp() {
   }, [from, to, profile, routeKey]);
 
   const onClick = useCallback((e: MapLayerMouseEvent) => {
-    const hit = e.features?.find((f) => f.layer.id === "features-circle" || f.layer.id === "features-line");
-    if (!hit || !hit.properties) {
+    const layerIds = ["features-circle-hit", "features-circle", "features-line"];
+    const map = mapRef.current?.getMap();
+    const existing = layerIds.filter((id) => Boolean(map?.getLayer(id)));
+    const queried =
+      existing.length && map
+        ? map.queryRenderedFeatures(e.point, { layers: existing })
+        : [];
+    const candidates = (e.features && e.features.length > 0 ? e.features : queried) as {
+      layer: { id: string };
+      properties?: FeatureProps & { notes?: string; tags?: string };
+    }[];
+    const hit = candidates.find((f) => layerIds.includes(f.layer.id));
+    if (!hit?.properties) {
       setPopup(null);
       return;
     }
-    const props = hit.properties as FeatureProps & { notes?: string; tags?: string };
+    const props = hit.properties;
     const tags =
       typeof props.tags === "string"
         ? (JSON.parse(props.tags) as Record<string, string>)
@@ -180,6 +192,7 @@ export default function MapApp() {
   return (
     <div className="relative h-dvh w-full">
       <Map
+        ref={mapRef}
         mapStyle={OSM_RASTER_STYLE}
         initialViewState={{
           longitude: ACADEMIC_AREA_CENTER.lon,
@@ -194,7 +207,7 @@ export default function MapApp() {
           CAMPUS_BBOX.east,
           CAMPUS_BBOX.north,
         ]}
-        interactiveLayerIds={["features-circle", "features-line"]}
+        interactiveLayerIds={["features-circle-hit", "features-circle", "features-line"]}
         onClick={onClick}
         attributionControl={{ compact: true }}
         style={{ width: "100%", height: "100%" }}
@@ -239,7 +252,7 @@ export default function MapApp() {
                   KIND_COLOR.skywalk,
                   KIND_COLOR.other,
                 ],
-                "line-width": 3,
+                "line-width": 5,
               }}
             />
             <Layer
@@ -247,7 +260,7 @@ export default function MapApp() {
               type="circle"
               filter={["==", ["geometry-type"], "Point"]}
               paint={{
-                "circle-radius": 6,
+                "circle-radius": 7,
                 "circle-stroke-width": 1,
                 "circle-stroke-color": "#ffffff",
                 "circle-color": [
@@ -269,6 +282,16 @@ export default function MapApp() {
                   KIND_COLOR.rest_area,
                   KIND_COLOR.other,
                 ],
+              }}
+            />
+            <Layer
+              id="features-circle-hit"
+              type="circle"
+              filter={["==", ["geometry-type"], "Point"]}
+              paint={{
+                "circle-radius": 16,
+                "circle-opacity": 0,
+                "circle-color": "#000000",
               }}
             />
           </Source>
@@ -322,7 +345,7 @@ export default function MapApp() {
           </div>
           <div className="rounded-xl border border-sky-200 bg-sky-50/95 px-3 py-2 text-xs text-sky-900 shadow-sm">
             Detailed accessibility coverage is the dashed Academic Area. The rest of
-            campus is base map only.
+            campus is base map only. Click a coloured dot or path for attributes.
           </div>
         </div>
         <div className="pointer-events-auto w-full max-w-md">
