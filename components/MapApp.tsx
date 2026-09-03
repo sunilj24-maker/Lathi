@@ -10,7 +10,7 @@ import {
   INITIAL_ZOOM,
   MAX_ZOOM,
   MIN_ZOOM,
-  OPENFREEMAP_STYLE,
+  OSM_RASTER_STYLE,
   type ProfileId,
 } from "@/data/config";
 import type { FeatureProps, Place } from "@/lib/types";
@@ -180,7 +180,7 @@ export default function MapApp() {
   return (
     <div className="relative h-dvh w-full">
       <Map
-        mapStyle={OPENFREEMAP_STYLE}
+        mapStyle={OSM_RASTER_STYLE}
         initialViewState={{
           longitude: ACADEMIC_AREA_CENTER.lon,
           latitude: ACADEMIC_AREA_CENTER.lat,

@@ -28,6 +28,25 @@ export const MAX_ZOOM = 20;
 export const OPENFREEMAP_STYLE =
   "https://tiles.openfreemap.org/styles/liberty";
 
+/** Raster fallback — no vector-tile/WebGL extras, OSM attribution required. */
+export const OSM_RASTER_STYLE = {
+  version: 8 as const,
+  sources: {
+    osm: {
+      type: "raster" as const,
+      tiles: [
+        "https://a.tile.openstreetmap.org/{z}/{x}/{y}.png",
+        "https://b.tile.openstreetmap.org/{z}/{x}/{y}.png",
+        "https://c.tile.openstreetmap.org/{z}/{x}/{y}.png",
+      ],
+      tileSize: 256,
+      attribution: "© OpenStreetMap contributors",
+      maxzoom: 19,
+    },
+  },
+  layers: [{ id: "osm-raster", type: "raster" as const, source: "osm" }],
+};
+
 export const ROUTABLE_HIGHWAYS = [
   "footway",
   "path",

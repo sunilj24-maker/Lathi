@@ -16,7 +16,7 @@ npm test
 npm run dev           # http://localhost:3000
 ```
 
-Deploy the GitHub repo to Vercel (Hobby). Map tiles are OpenFreeMap — no API key.
+Deploy the GitHub repo to Vercel (Hobby). Basemap tiles are OpenStreetMap raster (attribution on the map).
 
 Map data © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors, ODbL.
 
