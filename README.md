@@ -44,6 +44,8 @@ OpenStreetMap  ──npm run data:fetch──▶  data/raw/iitk.osm.json  ──
    ```bash
    node scripts/build-data.mjs --file data/josm-sessions/2026-09-10.osm
    ```
+   (`.osm` files are git-ignored; JOSM's single-quoted attributes and `action=` marks are understood.)
+   If Overpass lags behind a fresh upload, fetch straight from the live API instead: `node scripts/fetch-osm.mjs --osm-api`.
 4. App-only extras that OSM tags cannot hold (photos, survey notes) go in `data/overrides.json`, keyed by OSM id.
 
 `npm run data:fetch` tries three Overpass mirrors and falls back to the OSM API. The snapshot is committed so builds are reproducible and the site never depends on Overpass being up.
@@ -85,10 +87,11 @@ Cost per edge = `length × factor + penalties`. Forbidden edges are simply never
 
 | Rule | Normal | Wheelchair |
 |---|---|---|
-| `highway=steps` | ×1.2 | forbidden unless `ramp:wheelchair=yes` |
+| `highway=steps` | ×1.2 **+ 15 m per flight** | forbidden unless `ramp:wheelchair=yes` |
 | `wheelchair=no` | ×1 | forbidden |
-| `incline` > 8 % or `steep` | ×1 | ×6 |
-| `incline` 5–8 % | ×1 | ×2.5 |
+| ramp (`ramp=yes`, `ramp:wheelchair=yes`, or a sloped `level=0;1` footway) | ×1 | **always usable, ×0.8** (incline ignored — campus ramps are built for wheelchairs) |
+| `incline` > 8 % or `steep` on an ordinary path (not a ramp) | ×1 | ×6 |
+| `incline` 5–8 % on an ordinary path | ×1 | ×2.5 |
 | `width` < 0.9 m | ×1 | ×4 |
 | loose surface (gravel/sand/ground/unpaved…) | ×1.1 | ×3 |
 | `smoothness` bad/very_bad | ×1.1 | ×4 |

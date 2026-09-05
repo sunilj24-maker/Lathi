@@ -17,6 +17,7 @@
  * Returns Infinity for forbidden edges/nodes.
  */
 import { ROAD_HIGHWAYS } from "../../../data/config.js";
+import { isMultiLevel } from "../levels.js";
 
 export const FORBIDDEN = Infinity;
 
@@ -93,8 +94,15 @@ function wheelchairEdgeFactor(tags) {
   }
   let f = roadFactor(tags);
 
+  // A mapped ramp is, by definition, the wheelchair way between levels: always
+  // usable and preferred, whatever its incline. (Team decision — ramps on
+  // campus are built for wheelchairs; the incline tag is kept for information.)
+  const isRamp = tags.ramp === "yes" || tags["ramp:wheelchair"] === "yes" || (tags.highway !== "steps" && isMultiLevel(tags));
+  if (isRamp) return f * MIN_FACTOR;
+
   const inc = parseIncline(tags.incline);
   if (inc) {
+    // Ordinary sloped path (not a built ramp): steepness matters.
     if (inc.kind === "steep") f *= 6;
     else if (inc.kind === "percent") {
       if (inc.value > 8) f *= 6;
@@ -110,9 +118,6 @@ function wheelchairEdgeFactor(tags) {
   if (tags.wheelchair === "limited") f *= 2;
 
   if (tags.highway === "elevator") f *= MIN_FACTOR;
-  else if (tags.wheelchair === "yes" && (tags.ramp === "yes" || tags["ramp:wheelchair"] === "yes" || inc)) {
-    f *= MIN_FACTOR; // a confirmed accessible ramp: prefer it
-  }
   return f;
 }
 
@@ -140,9 +145,20 @@ function nodePenalty(tags, profileId) {
   return p;
 }
 
+/**
+ * Fixed metres added per staircase edge for walkers: climbing a flight costs
+ * time and effort beyond its length, so a level walkway a little longer than
+ * "down the stairs, along the road, up the stairs" should win.
+ */
+export const STAIRS_PENALTY_M = 15;
+
+function normalEdgePenalty(tags) {
+  return tags.highway === "steps" ? STAIRS_PENALTY_M : 0;
+}
+
 export const PROFILE_RULES = {
-  normal: { edgeFactor: normalEdgeFactor, nodePenalty: (t) => nodePenalty(t, "normal") },
-  wheelchair: { edgeFactor: wheelchairEdgeFactor, nodePenalty: (t) => nodePenalty(t, "wheelchair") },
+  normal: { edgeFactor: normalEdgeFactor, edgePenalty: normalEdgePenalty, nodePenalty: (t) => nodePenalty(t, "normal") },
+  wheelchair: { edgeFactor: wheelchairEdgeFactor, edgePenalty: () => 0, nodePenalty: (t) => nodePenalty(t, "wheelchair") },
 };
 
 /**
@@ -151,9 +167,11 @@ export const PROFILE_RULES = {
  */
 export function edgeCost(profileId, length, wayTags, toNodeTags) {
   const rules = PROFILE_RULES[profileId] ?? PROFILE_RULES.normal;
-  const f = rules.edgeFactor(wayTags ?? {});
+  const tags = wayTags ?? {};
+  const f = rules.edgeFactor(tags);
   if (f === FORBIDDEN) return FORBIDDEN;
   const p = rules.nodePenalty(toNodeTags);
   if (p === FORBIDDEN) return FORBIDDEN;
-  return length * f + p;
+  // Zero-length transfer edges (floor <-> connector) carry no penalty.
+  return length * f + p + (length > 0 ? rules.edgePenalty(tags) : 0);
 }

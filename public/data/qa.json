@@ -1,120 +1,8 @@
 {
- "generatedAt": "2026-09-05T00:16:00.177Z",
- "mainComponentSize": 6103,
+ "generatedAt": "2026-09-05T02:50:43.105Z",
+ "mainComponentSize": 6105,
  "components": 41,
  "issues": [
-  {
-   "type": "ambiguous-connector",
-   "severity": "high",
-   "message": "Footway tagged level=1;0 but no incline/ramp/steps — it acts as a free level change for everyone. Retag level=<one floor>, or add incline=…% + ramp=yes",
-   "lon": 80.233519,
-   "lat": 26.512375,
-   "osm": "way/152930191"
-  },
-  {
-   "type": "ambiguous-connector",
-   "severity": "high",
-   "message": "Footway tagged level=1;0 but no incline/ramp/steps — it acts as a free level change for everyone. Retag level=<one floor>, or add incline=…% + ramp=yes",
-   "lon": 80.233351,
-   "lat": 26.511095,
-   "osm": "way/1488889200"
-  },
-  {
-   "type": "ambiguous-connector",
-   "severity": "high",
-   "message": "Footway tagged level=1;0 but no incline/ramp/steps — it acts as a free level change for everyone. Retag level=<one floor>, or add incline=…% + ramp=yes",
-   "lon": 80.233076,
-   "lat": 26.511332,
-   "osm": "way/1489027369"
-  },
-  {
-   "type": "ambiguous-connector",
-   "severity": "high",
-   "message": "Footway tagged level=1;0 but no incline/ramp/steps — it acts as a free level change for everyone. Retag level=<one floor>, or add incline=…% + ramp=yes",
-   "lon": 80.232889,
-   "lat": 26.511464,
-   "osm": "way/1555329042"
-  },
-  {
-   "type": "ambiguous-connector",
-   "severity": "high",
-   "message": "Footway tagged level=1;0 but no incline/ramp/steps — it acts as a free level change for everyone. Retag level=<one floor>, or add incline=…% + ramp=yes",
-   "lon": 80.232896,
-   "lat": 26.511309,
-   "osm": "way/1555329043"
-  },
-  {
-   "type": "ambiguous-connector",
-   "severity": "high",
-   "message": "Footway tagged level=1;0 but no incline/ramp/steps — it acts as a free level change for everyone. Retag level=<one floor>, or add incline=…% + ramp=yes",
-   "lon": 80.233196,
-   "lat": 26.51145,
-   "osm": "way/1555329049"
-  },
-  {
-   "type": "ambiguous-connector",
-   "severity": "high",
-   "message": "Footway tagged level=1;0 but no incline/ramp/steps — it acts as a free level change for everyone. Retag level=<one floor>, or add incline=…% + ramp=yes",
-   "lon": 80.2329,
-   "lat": 26.511212,
-   "osm": "way/1555329051"
-  },
-  {
-   "type": "ambiguous-connector",
-   "severity": "high",
-   "message": "Footway tagged level=1;0 but no incline/ramp/steps — it acts as a free level change for everyone. Retag level=<one floor>, or add incline=…% + ramp=yes",
-   "lon": 80.232685,
-   "lat": 26.511207,
-   "osm": "way/1555343361"
-  },
-  {
-   "type": "ambiguous-connector",
-   "severity": "high",
-   "message": "Footway tagged level=1;0 but no incline/ramp/steps — it acts as a free level change for everyone. Retag level=<one floor>, or add incline=…% + ramp=yes",
-   "lon": 80.233255,
-   "lat": 26.511007,
-   "osm": "way/1555345740"
-  },
-  {
-   "type": "ambiguous-connector",
-   "severity": "high",
-   "message": "Footway tagged level=1;0 but no incline/ramp/steps — it acts as a free level change for everyone. Retag level=<one floor>, or add incline=…% + ramp=yes",
-   "lon": 80.233583,
-   "lat": 26.510666,
-   "osm": "way/1555346032"
-  },
-  {
-   "type": "ambiguous-connector",
-   "severity": "high",
-   "message": "Footway tagged level=1;0 but no incline/ramp/steps — it acts as a free level change for everyone. Retag level=<one floor>, or add incline=…% + ramp=yes",
-   "lon": 80.233584,
-   "lat": 26.51078,
-   "osm": "way/1555346034"
-  },
-  {
-   "type": "ambiguous-connector",
-   "severity": "high",
-   "message": "Footway tagged level=1;0 but no incline/ramp/steps — it acts as a free level change for everyone. Retag level=<one floor>, or add incline=…% + ramp=yes",
-   "lon": 80.231345,
-   "lat": 26.512371,
-   "osm": "way/1555349356"
-  },
-  {
-   "type": "dead-end-connector",
-   "severity": "high",
-   "message": "Stairs (level 0;1) ends in mid-air — nothing attached at this end",
-   "lon": 80.233202,
-   "lat": 26.511097,
-   "osm": "way/1488889188"
-  },
-  {
-   "type": "dead-end-connector",
-   "severity": "high",
-   "message": "Ramp/connector (level 1;0) ends in mid-air — nothing attached at this end",
-   "lon": 80.233075,
-   "lat": 26.511515,
-   "osm": "way/1555329043"
-  },
   {
    "type": "dead-end-connector",
    "severity": "high",
@@ -126,50 +14,10 @@
   {
    "type": "dead-end-connector",
    "severity": "high",
-   "message": "Ramp/connector (level 1;0) ends in mid-air — nothing attached at this end",
-   "lon": 80.233149,
-   "lat": 26.51085,
-   "osm": "way/1555345740"
-  },
-  {
-   "type": "dead-end-connector",
-   "severity": "high",
    "message": "Stairs (level 0;1) ends in mid-air — nothing attached at this end",
-   "lon": 80.233278,
-   "lat": 26.510983,
-   "osm": "way/1555345741"
-  },
-  {
-   "type": "dead-end-connector",
-   "severity": "high",
-   "message": "Ramp/connector (level 1;0) ends in mid-air — nothing attached at this end",
-   "lon": 80.233835,
-   "lat": 26.510743,
-   "osm": "way/1555346034"
-  },
-  {
-   "type": "dead-end-connector",
-   "severity": "high",
-   "message": "Ramp/connector (level 1;0) ends in mid-air — nothing attached at this end",
-   "lon": 80.231345,
-   "lat": 26.512371,
-   "osm": "way/1555349356"
-  },
-  {
-   "type": "entrance-island",
-   "severity": "high",
-   "message": "Entrance of Lecture Hall 6 (level 1) connects only to an isolated path group",
-   "lon": 80.232622,
-   "lat": 26.511424,
-   "osm": "node/14152387427"
-  },
-  {
-   "type": "entrance-island",
-   "severity": "high",
-   "message": "Entrance of Lecture Hall 5 (level 1) connects only to an isolated path group",
-   "lon": 80.232626,
-   "lat": 26.511476,
-   "osm": "node/14152387428"
+   "lon": 80.23321,
+   "lat": 26.510851,
+   "osm": "way/1555356940"
   },
   {
    "type": "entrance-island",
@@ -178,6 +26,30 @@
    "lon": 80.238246,
    "lat": 26.510604,
    "osm": "node/10772544368"
+  },
+  {
+   "type": "entrance-island",
+   "severity": "high",
+   "message": "Entrance of Lecture Hall 7 (level 1) connects only to an isolated path group",
+   "lon": 80.232941,
+   "lat": 26.51154,
+   "osm": "node/14152383098"
+  },
+  {
+   "type": "entrance-island",
+   "severity": "high",
+   "message": "Entrance of Lecture Hall 7 (level 1) connects only to an isolated path group",
+   "lon": 80.232855,
+   "lat": 26.511541,
+   "osm": "node/14152383099"
+  },
+  {
+   "type": "entrance-island",
+   "severity": "high",
+   "message": "Entrance of Lecture Hall 20 (level 0) connects only to an isolated path group",
+   "lon": 80.234458,
+   "lat": 26.51076,
+   "osm": "node/14152575273"
   },
   {
    "type": "entrance-unconnected",
@@ -190,6 +62,30 @@
   {
    "type": "entrance-unconnected",
    "severity": "high",
+   "message": "Entrance of Kislaya Nursery School (level 0) is not on any footway/corridor — join a path to this node",
+   "lon": 80.237403,
+   "lat": 26.510371,
+   "osm": "node/10772544369"
+  },
+  {
+   "type": "entrance-unconnected",
+   "severity": "high",
+   "message": "Entrance of Tutorial Block (level 1) is not on any footway/corridor — join a path to this node",
+   "lon": 80.232516,
+   "lat": 26.510885,
+   "osm": "node/13649048360"
+  },
+  {
+   "type": "entrance-unconnected",
+   "severity": "high",
+   "message": "Entrance of Tutorial Block (level 1) is not on any footway/corridor — join a path to this node",
+   "lon": 80.232206,
+   "lat": 26.510826,
+   "osm": "node/13649048446"
+  },
+  {
+   "type": "entrance-unconnected",
+   "severity": "high",
    "message": "Entrance of Tutorial Block (level 0) is not on any footway/corridor — join a path to this node",
    "lon": 80.232508,
    "lat": 26.511087,
@@ -198,26 +94,178 @@
   {
    "type": "entrance-unconnected",
    "severity": "high",
-   "message": "Entrance of Lecture Hall 20 (level 2) is not on any footway/corridor — join a path to this node",
-   "lon": 80.234455,
+   "message": "Entrance of Tutorial Block (level 1) is not on any footway/corridor — join a path to this node",
+   "lon": 80.232167,
+   "lat": 26.510963,
+   "osm": "node/13649274774"
+  },
+  {
+   "type": "entrance-unconnected",
+   "severity": "high",
+   "message": "Entrance of Tutorial Block (level 1) is not on any footway/corridor — join a path to this node",
+   "lon": 80.2324,
+   "lat": 26.511071,
+   "osm": "node/13657840009"
+  },
+  {
+   "type": "entrance-unconnected",
+   "severity": "high",
+   "message": "Entrance of Tutorial Block (level 1) is not on any footway/corridor — join a path to this node",
+   "lon": 80.232487,
+   "lat": 26.511023,
+   "osm": "node/13657840015"
+  },
+  {
+   "type": "entrance-unconnected",
+   "severity": "high",
+   "message": "Entrance of Tutorial Block (level 1) is not on any footway/corridor — join a path to this node",
+   "lon": 80.232509,
+   "lat": 26.510985,
+   "osm": "node/13657840016"
+  },
+  {
+   "type": "entrance-unconnected",
+   "severity": "high",
+   "message": "Entrance of Tutorial Block (level 1) is not on any footway/corridor — join a path to this node",
+   "lon": 80.232491,
+   "lat": 26.510843,
+   "osm": "node/13657840023"
+  },
+  {
+   "type": "entrance-unconnected",
+   "severity": "high",
+   "message": "Entrance of Tutorial Block (level 1) is not on any footway/corridor — join a path to this node",
+   "lon": 80.232407,
    "lat": 26.510783,
-   "osm": "node/14152575269"
+   "osm": "node/13657840024"
   },
   {
    "type": "entrance-unconnected",
    "severity": "high",
-   "message": "Entrance of Lecture Hall 20 (level 2) is not on any footway/corridor — join a path to this node",
-   "lon": 80.234438,
-   "lat": 26.510929,
-   "osm": "node/14152575270"
+   "message": "Entrance of Tutorial Block (level 1) is not on any footway/corridor — join a path to this node",
+   "lon": 80.232246,
+   "lat": 26.510796,
+   "osm": "node/13657840027"
   },
   {
    "type": "entrance-unconnected",
    "severity": "high",
-   "message": "Entrance of Lecture Hall 18 (level 2) is not on any footway/corridor — join a path to this node",
-   "lon": 80.234198,
-   "lat": 26.510637,
-   "osm": "node/14152575271"
+   "message": "Entrance of Tutorial Block (level 1) is not on any footway/corridor — join a path to this node",
+   "lon": 80.232167,
+   "lat": 26.510913,
+   "osm": "node/13657840030"
+  },
+  {
+   "type": "entrance-unconnected",
+   "severity": "high",
+   "message": "Entrance of Tutorial Block (level 1) is not on any footway/corridor — join a path to this node",
+   "lon": 80.232167,
+   "lat": 26.510963,
+   "osm": "node/13657840031"
+  },
+  {
+   "type": "entrance-unconnected",
+   "severity": "high",
+   "message": "Entrance of Tutorial Block (level 1) is not on any footway/corridor — join a path to this node",
+   "lon": 80.232248,
+   "lat": 26.511078,
+   "osm": "node/13657840034"
+  },
+  {
+   "type": "entrance-unconnected",
+   "severity": "high",
+   "message": "Entrance of Tutorial Block (level 1) is not on any footway/corridor — join a path to this node",
+   "lon": 80.232407,
+   "lat": 26.510784,
+   "osm": "node/13657840064"
+  },
+  {
+   "type": "entrance-unconnected",
+   "severity": "high",
+   "message": "Entrance of Tutorial Block (level 1) is not on any footway/corridor — join a path to this node",
+   "lon": 80.232355,
+   "lat": 26.510773,
+   "osm": "node/13657840065"
+  },
+  {
+   "type": "entrance-unconnected",
+   "severity": "high",
+   "message": "Entrance of Tutorial Block (level 1) is not on any footway/corridor — join a path to this node",
+   "lon": 80.232246,
+   "lat": 26.510796,
+   "osm": "node/13657840066"
+  },
+  {
+   "type": "entrance-unconnected",
+   "severity": "high",
+   "message": "Entrance of Tutorial Block (level 1) is not on any footway/corridor — join a path to this node",
+   "lon": 80.232491,
+   "lat": 26.510843,
+   "osm": "node/13657840067"
+  },
+  {
+   "type": "entrance-unconnected",
+   "severity": "high",
+   "message": "Entrance of Tutorial Block (level 1) is not on any footway/corridor — join a path to this node",
+   "lon": 80.232509,
+   "lat": 26.510985,
+   "osm": "node/13657840071"
+  },
+  {
+   "type": "entrance-unconnected",
+   "severity": "high",
+   "message": "Entrance of Tutorial Block (level 1) is not on any footway/corridor — join a path to this node",
+   "lon": 80.232487,
+   "lat": 26.511023,
+   "osm": "node/13657840072"
+  },
+  {
+   "type": "entrance-unconnected",
+   "severity": "high",
+   "message": "Entrance of Tutorial Block (level 1) is not on any footway/corridor — join a path to this node",
+   "lon": 80.232206,
+   "lat": 26.511049,
+   "osm": "node/13657840089"
+  },
+  {
+   "type": "entrance-unconnected",
+   "severity": "high",
+   "message": "Entrance of Tutorial Block (level 1) is not on any footway/corridor — join a path to this node",
+   "lon": 80.232167,
+   "lat": 26.510913,
+   "osm": "node/13657840095"
+  },
+  {
+   "type": "entrance-unconnected",
+   "severity": "high",
+   "message": "Entrance of Lecture Hall 1 (level 1) is not on any footway/corridor — join a path to this node",
+   "lon": 80.232871,
+   "lat": 26.511166,
+   "osm": "node/14152368327"
+  },
+  {
+   "type": "entrance-unconnected",
+   "severity": "high",
+   "message": "Entrance of Lecture Hall 2 (level 1) is not on any footway/corridor — join a path to this node",
+   "lon": 80.232939,
+   "lat": 26.511161,
+   "osm": "node/14152368328"
+  },
+  {
+   "type": "entrance-unconnected",
+   "severity": "high",
+   "message": "Entrance of Lecture Hall 6 (level 1) is not on any footway/corridor — join a path to this node",
+   "lon": 80.232622,
+   "lat": 26.511424,
+   "osm": "node/14152387427"
+  },
+  {
+   "type": "entrance-unconnected",
+   "severity": "high",
+   "message": "Entrance of Lecture Hall 5 (level 1) is not on any footway/corridor — join a path to this node",
+   "lon": 80.232626,
+   "lat": 26.511476,
+   "osm": "node/14152387428"
   },
   {
    "type": "entrance-unconnected",
@@ -230,74 +278,50 @@
   {
    "type": "entrance-unconnected",
    "severity": "high",
-   "message": "Entrance of Lecture Hall 20 (level 0) is not on any footway/corridor — join a path to this node",
-   "lon": 80.234458,
-   "lat": 26.510756,
-   "osm": "node/14152575273"
+   "message": "Entrance of Tutorial Block (level 1) is not on any footway/corridor — join a path to this node",
+   "lon": 80.23219,
+   "lat": 26.510813,
+   "osm": "node/14152583179"
   },
   {
    "type": "entrance-unconnected",
    "severity": "high",
-   "message": "Entrance of Lecture Hall 18 (level 0) is not on any footway/corridor — join a path to this node",
-   "lon": 80.234189,
-   "lat": 26.510644,
-   "osm": "node/14152575274"
+   "message": "Entrance of Tutorial Block (level 1) is not on any footway/corridor — join a path to this node",
+   "lon": 80.232354,
+   "lat": 26.510757,
+   "osm": "node/14152583180"
   },
   {
    "type": "entrance-unconnected",
    "severity": "high",
-   "message": "Entrance of Lecture Hall 20 (level 0) is not on any footway/corridor — join a path to this node",
-   "lon": 80.234387,
-   "lat": 26.511006,
-   "osm": "node/14152575275"
+   "message": "Entrance of Tutorial Block (level 1) is not on any footway/corridor — join a path to this node",
+   "lon": 80.232403,
+   "lat": 26.511083,
+   "osm": "node/14152583181"
   },
   {
    "type": "entrance-unconnected",
    "severity": "high",
-   "message": "Entrance of Lecture Hall 20 (level 0) is not on any footway/corridor — join a path to this node",
-   "lon": 80.234217,
-   "lat": 26.510971,
-   "osm": "node/14152575276"
+   "message": "Entrance of Tutorial Block (level 1) is not on any footway/corridor — join a path to this node",
+   "lon": 80.232354,
+   "lat": 26.51109,
+   "osm": "node/14152583182"
   },
   {
    "type": "entrance-unconnected",
    "severity": "high",
-   "message": "Entrance of Lecture Hall 18 (level 0) is not on any footway/corridor — join a path to this node",
-   "lon": 80.234115,
-   "lat": 26.510913,
-   "osm": "node/14152575277"
+   "message": "Entrance of Tutorial Block (level 1) is not on any footway/corridor — join a path to this node",
+   "lon": 80.232256,
+   "lat": 26.511068,
+   "osm": "node/14152583183"
   },
   {
    "type": "entrance-unconnected",
    "severity": "high",
-   "message": "Entrance of Lecture Hall 18 (level 0) is not on any footway/corridor — join a path to this node",
-   "lon": 80.234025,
-   "lat": 26.510828,
-   "osm": "node/14152575278"
-  },
-  {
-   "type": "entrance-unconnected",
-   "severity": "high",
-   "message": "Entrance of Lecture Hall 20 (level 2) is not on any footway/corridor — join a path to this node",
-   "lon": 80.234308,
-   "lat": 26.511007,
-   "osm": "node/14152575280"
-  },
-  {
-   "type": "entrance-unconnected",
-   "severity": "high",
-   "message": "Entrance of Lecture Hall 18 (level 2) is not on any footway/corridor — join a path to this node",
-   "lon": 80.234073,
-   "lat": 26.510881,
-   "osm": "node/14152575283"
-  },
-  {
-   "type": "entrance-unconnected",
-   "severity": "high",
-   "message": "Entrance of Kislaya Nursery School (level 0) is not on any footway/corridor — join a path to this node",
-   "lon": 80.237403,
-   "lat": 26.510371,
-   "osm": "node/10772544369"
+   "message": "Entrance of Tutorial Block (level 1) is not on any footway/corridor — join a path to this node",
+   "lon": 80.232215,
+   "lat": 26.511042,
+   "osm": "node/14152583184"
   },
   {
    "type": "island",
@@ -318,18 +342,66 @@
   {
    "type": "island",
    "severity": "high",
-   "message": "Disconnected group of 3 path points (footway) near Lecture Hall 5 — not reachable from the rest of the campus",
-   "lon": 80.232622,
-   "lat": 26.511451,
-   "osm": "node/14152387428"
+   "message": "Disconnected group of 8 path points (footway) near Lecture Hall 7 — not reachable from the rest of the campus",
+   "lon": 80.232893,
+   "lat": 26.511505,
+   "osm": "node/14152383098"
   },
   {
    "type": "island",
    "severity": "high",
-   "message": "Disconnected group of 2 path points (steps) near Lecture Hall 18 — not reachable from the rest of the campus",
-   "lon": 80.234179,
-   "lat": 26.510641,
-   "osm": "node/14152575266"
+   "message": "Disconnected group of 3 path points (footway) near Lecture Hall 20 — not reachable from the rest of the campus",
+   "lon": 80.23446,
+   "lat": 26.510847,
+   "osm": "node/14152648907"
+  },
+  {
+   "type": "level-wall",
+   "severity": "medium",
+   "message": "Paths on levels 0 and 1 share this node but there are no stairs/ramp/lift here — treated as a wall. If people can change level here, draw the stairs/ramp",
+   "lon": 80.233022,
+   "lat": 26.512373,
+   "osm": "node/1656958709"
+  },
+  {
+   "type": "level-wall",
+   "severity": "medium",
+   "message": "Paths on levels 1 and 0 share this node but there are no stairs/ramp/lift here — treated as a wall. If people can change level here, draw the stairs/ramp",
+   "lon": 80.234792,
+   "lat": 26.511032,
+   "osm": "node/10583129146"
+  },
+  {
+   "type": "level-wall",
+   "severity": "medium",
+   "message": "Paths on levels 1 and 0 share this node but there are no stairs/ramp/lift here — treated as a wall. If people can change level here, draw the stairs/ramp",
+   "lon": 80.234777,
+   "lat": 26.511655,
+   "osm": "node/13647137549"
+  },
+  {
+   "type": "level-wall",
+   "severity": "medium",
+   "message": "Paths on levels 1 and 0 share this node but there are no stairs/ramp/lift here — treated as a wall. If people can change level here, draw the stairs/ramp",
+   "lon": 80.234766,
+   "lat": 26.512034,
+   "osm": "node/13647137543"
+  },
+  {
+   "type": "level-wall",
+   "severity": "medium",
+   "message": "Paths on levels 1 and 0 share this node but there are no stairs/ramp/lift here — treated as a wall. If people can change level here, draw the stairs/ramp",
+   "lon": 80.234729,
+   "lat": 26.512385,
+   "osm": "node/1656958710"
+  },
+  {
+   "type": "level-wall",
+   "severity": "medium",
+   "message": "Paths on levels 1 and 0 share this node but there are no stairs/ramp/lift here — treated as a wall. If people can change level here, draw the stairs/ramp",
+   "lon": 80.234176,
+   "lat": 26.51238,
+   "osm": "node/9049665240"
   },
   {
    "type": "level-wall",
@@ -382,14 +454,6 @@
   {
    "type": "level-wall",
    "severity": "medium",
-   "message": "Paths on levels 0 and 1 share this node but there are no stairs/ramp/lift here — treated as a wall. If people can change level here, draw the stairs/ramp",
-   "lon": 80.2329,
-   "lat": 26.511212,
-   "osm": "node/14152272700"
-  },
-  {
-   "type": "level-wall",
-   "severity": "medium",
    "message": "Paths on levels 1 and 0 share this node but there are no stairs/ramp/lift here — treated as a wall. If people can change level here, draw the stairs/ramp",
    "lon": 80.23308,
    "lat": 26.511711,
@@ -412,12 +476,20 @@
    "osm": "way/1555343350"
   },
   {
-   "type": "building-no-entrance",
-   "severity": "low",
-   "message": "P K Kelkar Library has no entrance node — routes will end at the nearest outdoor path instead of the door",
-   "lon": 80.233902,
-   "lat": 26.512385,
-   "osm": "relation/20322513"
+   "type": "steep-ramp",
+   "severity": "medium",
+   "message": "Ramp incline 10.5% exceeds 8 % — heavily penalised for wheelchair users",
+   "lon": 80.233924,
+   "lat": 26.510701,
+   "osm": "way/1555355647"
+  },
+  {
+   "type": "steep-ramp",
+   "severity": "medium",
+   "message": "Ramp incline 10.5% exceeds 8 % — heavily penalised for wheelchair users",
+   "lon": 80.233893,
+   "lat": 26.510673,
+   "osm": "way/1555355649"
   },
   {
    "type": "building-no-entrance",
@@ -438,162 +510,10 @@
   {
    "type": "building-no-entrance",
    "severity": "low",
-   "message": "Cafe Coffee Day has no entrance node — routes will end at the nearest outdoor path instead of the door",
-   "lon": 80.234303,
-   "lat": 26.511973,
-   "osm": "way/268050281"
-  },
-  {
-   "type": "building-no-entrance",
-   "severity": "low",
-   "message": "Southern Labs has no entrance node — routes will end at the nearest outdoor path instead of the door",
-   "lon": 80.234716,
-   "lat": 26.511733,
-   "osm": "way/268050282"
-  },
-  {
-   "type": "building-no-entrance",
-   "severity": "low",
-   "message": "Advanced Centre For Materials Science has no entrance node — routes will end at the nearest outdoor path instead of the door",
-   "lon": 80.231371,
-   "lat": 26.511492,
-   "osm": "way/268061984"
-  },
-  {
-   "type": "building-no-entrance",
-   "severity": "low",
-   "message": "Samtel Centre for Display Technologies has no entrance node — routes will end at the nearest outdoor path instead of the door",
-   "lon": 80.232089,
-   "lat": 26.511776,
-   "osm": "way/315780951"
-  },
-  {
-   "type": "building-no-entrance",
-   "severity": "low",
-   "message": "Hall 2 Block B has no entrance node — routes will end at the nearest outdoor path instead of the door",
-   "lon": 80.230016,
-   "lat": 26.511157,
-   "osm": "way/383013949"
-  },
-  {
-   "type": "building-no-entrance",
-   "severity": "low",
-   "message": "Hall 2 Block C has no entrance node — routes will end at the nearest outdoor path instead of the door",
-   "lon": 80.230211,
-   "lat": 26.510808,
-   "osm": "way/383016139"
-  },
-  {
-   "type": "building-no-entrance",
-   "severity": "low",
-   "message": "Hall 2 Block E has no entrance node — routes will end at the nearest outdoor path instead of the door",
-   "lon": 80.229978,
-   "lat": 26.510204,
-   "osm": "way/383018469"
-  },
-  {
-   "type": "building-no-entrance",
-   "severity": "low",
-   "message": "Hall 2 Block D has no entrance node — routes will end at the nearest outdoor path instead of the door",
-   "lon": 80.230338,
-   "lat": 26.510365,
-   "osm": "way/383019229"
-  },
-  {
-   "type": "building-no-entrance",
-   "severity": "low",
-   "message": "Faculty Building Annexe has no entrance node — routes will end at the nearest outdoor path instead of the door",
-   "lon": 80.235009,
-   "lat": 26.51225,
-   "osm": "way/1060146288"
-  },
-  {
-   "type": "building-no-entrance",
-   "severity": "low",
-   "message": "Outreach Auditorium has no entrance node — routes will end at the nearest outdoor path instead of the door",
-   "lon": 80.234567,
-   "lat": 26.509141,
-   "osm": "way/1090937351"
-  },
-  {
-   "type": "building-no-entrance",
-   "severity": "low",
-   "message": "Security Control Room has no entrance node — routes will end at the nearest outdoor path instead of the door",
-   "lon": 80.230458,
-   "lat": 26.511651,
-   "osm": "way/1131208303"
-  },
-  {
-   "type": "building-no-entrance",
-   "severity": "low",
-   "message": "National Centre for Flexible Electronics has no entrance node — routes will end at the nearest outdoor path instead of the door",
-   "lon": 80.231102,
-   "lat": 26.511926,
-   "osm": "way/1131622792"
-  },
-  {
-   "type": "building-no-entrance",
-   "severity": "low",
-   "message": "New Lecture Hall Complex has no entrance node — routes will end at the nearest outdoor path instead of the door",
-   "lon": 80.233857,
-   "lat": 26.510764,
-   "osm": "way/1135339096"
-  },
-  {
-   "type": "building-no-entrance",
-   "severity": "low",
-   "message": "Lecture Hall 14 has no entrance node — routes will end at the nearest outdoor path instead of the door",
-   "lon": 80.233172,
-   "lat": 26.511018,
-   "osm": "way/1143854843"
-  },
-  {
-   "type": "building-no-entrance",
-   "severity": "low",
-   "message": "Lecture Hall 15 has no entrance node — routes will end at the nearest outdoor path instead of the door",
-   "lon": 80.233333,
-   "lat": 26.510882,
-   "osm": "way/1143854844"
-  },
-  {
-   "type": "building-no-entrance",
-   "severity": "low",
-   "message": "Electric Substation No 1 has no entrance node — routes will end at the nearest outdoor path instead of the door",
-   "lon": 80.23039,
-   "lat": 26.512041,
-   "osm": "way/1158746039"
-  },
-  {
-   "type": "building-no-entrance",
-   "severity": "low",
-   "message": "Starbucks has no entrance node — routes will end at the nearest outdoor path instead of the door",
-   "lon": 80.234878,
-   "lat": 26.510768,
-   "osm": "way/1486428403"
-  },
-  {
-   "type": "building-no-entrance",
-   "severity": "low",
-   "message": "Kislaya Nursery School has no entrance node — routes will end at the nearest outdoor path instead of the door",
-   "lon": 80.23673,
-   "lat": 26.510175,
-   "osm": "way/432740283"
-  },
-  {
-   "type": "building-no-entrance",
-   "severity": "low",
-   "message": "Campus D Shop has no entrance node — routes will end at the nearest outdoor path instead of the door",
-   "lon": 80.235939,
-   "lat": 26.511772,
-   "osm": "way/1131619521"
-  },
-  {
-   "type": "building-no-entrance",
-   "severity": "low",
-   "message": "State Bank of India has no entrance node — routes will end at the nearest outdoor path instead of the door",
-   "lon": 80.236702,
-   "lat": 26.511677,
-   "osm": "way/1137756293"
+   "message": "Computer Centre has no entrance node — routes will end at the nearest outdoor path instead of the door",
+   "lon": 80.234435,
+   "lat": 26.513625,
+   "osm": "way/157018921"
   },
   {
    "type": "building-no-entrance",
@@ -606,34 +526,18 @@
   {
    "type": "building-no-entrance",
    "severity": "low",
-   "message": "Western Labs has no entrance node — routes will end at the nearest outdoor path instead of the door",
-   "lon": 80.231695,
-   "lat": 26.512219,
-   "osm": "way/268061985"
-  },
-  {
-   "type": "building-no-entrance",
-   "severity": "low",
-   "message": "Department of Sustainable Energy Engineering has no entrance node — routes will end at the nearest outdoor path instead of the door",
-   "lon": 80.235875,
-   "lat": 26.510128,
-   "osm": "way/1131994409"
-  },
-  {
-   "type": "building-no-entrance",
-   "severity": "low",
-   "message": "Computer Centre has no entrance node — routes will end at the nearest outdoor path instead of the door",
-   "lon": 80.234435,
-   "lat": 26.513625,
-   "osm": "way/157018921"
-  },
-  {
-   "type": "building-no-entrance",
-   "severity": "low",
    "message": "Faculty Building has no entrance node — routes will end at the nearest outdoor path instead of the door",
    "lon": 80.233159,
    "lat": 26.513013,
    "osm": "way/268050280"
+  },
+  {
+   "type": "building-no-entrance",
+   "severity": "low",
+   "message": "Southern Labs has no entrance node — routes will end at the nearest outdoor path instead of the door",
+   "lon": 80.234716,
+   "lat": 26.511733,
+   "osm": "way/268050282"
   },
   {
    "type": "building-no-entrance",
@@ -686,6 +590,22 @@
   {
    "type": "building-no-entrance",
    "severity": "low",
+   "message": "Advanced Centre For Materials Science has no entrance node — routes will end at the nearest outdoor path instead of the door",
+   "lon": 80.231371,
+   "lat": 26.511492,
+   "osm": "way/268061984"
+  },
+  {
+   "type": "building-no-entrance",
+   "severity": "low",
+   "message": "Western Labs has no entrance node — routes will end at the nearest outdoor path instead of the door",
+   "lon": 80.231695,
+   "lat": 26.512219,
+   "osm": "way/268061985"
+  },
+  {
+   "type": "building-no-entrance",
+   "severity": "low",
    "message": "ACES has no entrance node — routes will end at the nearest outdoor path instead of the door",
    "lon": 80.232142,
    "lat": 26.513058,
@@ -698,6 +618,14 @@
    "lon": 80.231376,
    "lat": 26.512959,
    "osm": "way/315780949"
+  },
+  {
+   "type": "building-no-entrance",
+   "severity": "low",
+   "message": "Samtel Centre for Display Technologies has no entrance node — routes will end at the nearest outdoor path instead of the door",
+   "lon": 80.232089,
+   "lat": 26.511776,
+   "osm": "way/315780951"
   },
   {
    "type": "building-no-entrance",
@@ -742,6 +670,46 @@
   {
    "type": "building-no-entrance",
    "severity": "low",
+   "message": "Hall 2 Block B has no entrance node — routes will end at the nearest outdoor path instead of the door",
+   "lon": 80.230016,
+   "lat": 26.511157,
+   "osm": "way/383013949"
+  },
+  {
+   "type": "building-no-entrance",
+   "severity": "low",
+   "message": "Hall 2 Block C has no entrance node — routes will end at the nearest outdoor path instead of the door",
+   "lon": 80.230211,
+   "lat": 26.510808,
+   "osm": "way/383016139"
+  },
+  {
+   "type": "building-no-entrance",
+   "severity": "low",
+   "message": "Hall 2 Block E has no entrance node — routes will end at the nearest outdoor path instead of the door",
+   "lon": 80.229978,
+   "lat": 26.510204,
+   "osm": "way/383018469"
+  },
+  {
+   "type": "building-no-entrance",
+   "severity": "low",
+   "message": "Hall 2 Block D has no entrance node — routes will end at the nearest outdoor path instead of the door",
+   "lon": 80.230338,
+   "lat": 26.510365,
+   "osm": "way/383019229"
+  },
+  {
+   "type": "building-no-entrance",
+   "severity": "low",
+   "message": "Kislaya Nursery School has no entrance node — routes will end at the nearest outdoor path instead of the door",
+   "lon": 80.23673,
+   "lat": 26.510175,
+   "osm": "way/432740283"
+  },
+  {
+   "type": "building-no-entrance",
+   "severity": "low",
    "message": "Rajeev Motwani Building has no entrance node — routes will end at the nearest outdoor path instead of the door",
    "lon": 80.234867,
    "lat": 26.514328,
@@ -762,6 +730,22 @@
    "lon": 80.234284,
    "lat": 26.514109,
    "osm": "way/501658530"
+  },
+  {
+   "type": "building-no-entrance",
+   "severity": "low",
+   "message": "Faculty Building Annexe has no entrance node — routes will end at the nearest outdoor path instead of the door",
+   "lon": 80.235009,
+   "lat": 26.51225,
+   "osm": "way/1060146288"
+  },
+  {
+   "type": "building-no-entrance",
+   "severity": "low",
+   "message": "Outreach Auditorium has no entrance node — routes will end at the nearest outdoor path instead of the door",
+   "lon": 80.234567,
+   "lat": 26.509141,
+   "osm": "way/1090937351"
   },
   {
    "type": "building-no-entrance",
@@ -798,10 +782,50 @@
   {
    "type": "building-no-entrance",
    "severity": "low",
+   "message": "Security Control Room has no entrance node — routes will end at the nearest outdoor path instead of the door",
+   "lon": 80.230458,
+   "lat": 26.511651,
+   "osm": "way/1131208303"
+  },
+  {
+   "type": "building-no-entrance",
+   "severity": "low",
+   "message": "Campus D Shop has no entrance node — routes will end at the nearest outdoor path instead of the door",
+   "lon": 80.235939,
+   "lat": 26.511772,
+   "osm": "way/1131619521"
+  },
+  {
+   "type": "building-no-entrance",
+   "severity": "low",
+   "message": "National Centre for Flexible Electronics has no entrance node — routes will end at the nearest outdoor path instead of the door",
+   "lon": 80.231102,
+   "lat": 26.511926,
+   "osm": "way/1131622792"
+  },
+  {
+   "type": "building-no-entrance",
+   "severity": "low",
+   "message": "Department of Sustainable Energy Engineering has no entrance node — routes will end at the nearest outdoor path instead of the door",
+   "lon": 80.235875,
+   "lat": 26.510128,
+   "osm": "way/1131994409"
+  },
+  {
+   "type": "building-no-entrance",
+   "severity": "low",
    "message": "Workshop has no entrance node — routes will end at the nearest outdoor path instead of the door",
    "lon": 80.231679,
    "lat": 26.513998,
    "osm": "way/1135339093"
+  },
+  {
+   "type": "building-no-entrance",
+   "severity": "low",
+   "message": "New Lecture Hall Complex has no entrance node — routes will end at the nearest outdoor path instead of the door",
+   "lon": 80.23387,
+   "lat": 26.510762,
+   "osm": "way/1135339096"
   },
   {
    "type": "building-no-entrance",
@@ -842,6 +866,46 @@
    "lon": 80.230351,
    "lat": 26.514284,
    "osm": "way/1137755506"
+  },
+  {
+   "type": "building-no-entrance",
+   "severity": "low",
+   "message": "Smart Grid Semi-Urban Field Pilot (Lanes 32 and 33) has no entrance node — routes will end at the nearest outdoor path instead of the door",
+   "lon": 80.237553,
+   "lat": 26.51412,
+   "osm": "way/1137756289"
+  },
+  {
+   "type": "building-no-entrance",
+   "severity": "low",
+   "message": "State Bank of India has no entrance node — routes will end at the nearest outdoor path instead of the door",
+   "lon": 80.236702,
+   "lat": 26.511677,
+   "osm": "way/1137756293"
+  },
+  {
+   "type": "building-no-entrance",
+   "severity": "low",
+   "message": "Lecture Hall 14 has no entrance node — routes will end at the nearest outdoor path instead of the door",
+   "lon": 80.233178,
+   "lat": 26.511008,
+   "osm": "way/1143854843"
+  },
+  {
+   "type": "building-no-entrance",
+   "severity": "low",
+   "message": "Lecture Hall 15 has no entrance node — routes will end at the nearest outdoor path instead of the door",
+   "lon": 80.233321,
+   "lat": 26.510886,
+   "osm": "way/1143854844"
+  },
+  {
+   "type": "building-no-entrance",
+   "severity": "low",
+   "message": "Electric Substation No 1 has no entrance node — routes will end at the nearest outdoor path instead of the door",
+   "lon": 80.23039,
+   "lat": 26.512041,
+   "osm": "way/1158746039"
   },
   {
    "type": "building-no-entrance",
@@ -910,10 +974,10 @@
   {
    "type": "building-no-entrance",
    "severity": "low",
-   "message": "Smart Grid Semi-Urban Field Pilot (Lanes 32 and 33) has no entrance node — routes will end at the nearest outdoor path instead of the door",
-   "lon": 80.237553,
-   "lat": 26.51412,
-   "osm": "way/1137756289"
+   "message": "Starbucks has no entrance node — routes will end at the nearest outdoor path instead of the door",
+   "lon": 80.234878,
+   "lat": 26.510768,
+   "osm": "way/1486428403"
   },
   {
    "type": "island",
@@ -921,15 +985,15 @@
    "message": "Disconnected group of 201 path points (residential) — not reachable from the rest of the campus",
    "lon": 80.237353,
    "lat": 26.527767,
-   "osm": "node/8806821756"
+   "osm": "node/8806780960"
   },
   {
    "type": "island",
    "severity": "low",
-   "message": "Disconnected group of 76 path points (residential, unclassified, service) — not reachable from the rest of the campus",
+   "message": "Disconnected group of 76 path points (unclassified, residential, service) — not reachable from the rest of the campus",
    "lon": 80.2463,
    "lat": 26.519672,
-   "osm": "node/8830782430"
+   "osm": "node/7054745360"
   },
   {
    "type": "island",
@@ -945,7 +1009,7 @@
    "message": "Disconnected group of 34 path points (residential) — not reachable from the rest of the campus",
    "lon": 80.234609,
    "lat": 26.495536,
-   "osm": "node/8819562752"
+   "osm": "node/8819916470"
   },
   {
    "type": "island",
@@ -958,18 +1022,18 @@
   {
    "type": "island",
    "severity": "low",
-   "message": "Disconnected group of 21 path points (service) — not reachable from the rest of the campus",
-   "lon": 80.249241,
-   "lat": 26.510418,
-   "osm": "node/8823382113"
-  },
-  {
-   "type": "island",
-   "severity": "low",
    "message": "Disconnected group of 21 path points (residential) — not reachable from the rest of the campus",
    "lon": 80.240466,
    "lat": 26.525414,
    "osm": "node/8806887940"
+  },
+  {
+   "type": "island",
+   "severity": "low",
+   "message": "Disconnected group of 21 path points (service) — not reachable from the rest of the campus",
+   "lon": 80.249241,
+   "lat": 26.510418,
+   "osm": "node/8823382113"
   },
   {
    "type": "island",

@@ -4,10 +4,11 @@ import { edgeCost, parseIncline, parseWidthMeters, FORBIDDEN } from "../src/lib/
 
 const approx = (actual, expected) => assert.ok(Math.abs(actual - expected) < 1e-9, `${actual} ≠ ${expected}`);
 
-test("steps: ×1.2 for normal, forbidden for wheelchair unless a ramp runs beside", () => {
-  assert.equal(edgeCost("normal", 100, { highway: "steps" }), 120);
+test("steps: ×1.2 + 15 m per flight for normal, forbidden for wheelchair unless a ramp runs beside", () => {
+  assert.equal(edgeCost("normal", 100, { highway: "steps" }), 135);
+  assert.equal(edgeCost("normal", 0, { highway: "steps" }), 0); // transfer edge: no penalty
   assert.equal(edgeCost("wheelchair", 100, { highway: "steps" }), FORBIDDEN);
-  assert.equal(edgeCost("wheelchair", 100, { highway: "steps", "ramp:wheelchair": "yes" }), 100);
+  approx(edgeCost("wheelchair", 100, { highway: "steps", "ramp:wheelchair": "yes" }), 80); // ramp beside: preferred
 });
 
 test("wheelchair=no is forbidden only for the wheelchair profile", () => {
@@ -31,8 +32,11 @@ test("narrow, loose and rough surfaces", () => {
   approx(edgeCost("normal", 100, { highway: "footway", smoothness: "very_bad" }), 110);
 });
 
-test("confirmed accessible ramps and elevators are preferred (×0.8)", () => {
+test("ramps are always usable and preferred (×0.8) regardless of incline; lifts too", () => {
   assert.equal(edgeCost("wheelchair", 100, { highway: "footway", ramp: "yes", wheelchair: "yes" }), 80);
+  approx(edgeCost("wheelchair", 100, { highway: "footway", ramp: "yes", incline: "10.5%" }), 80);
+  approx(edgeCost("wheelchair", 100, { highway: "footway", level: "0;1", incline: "12%" }), 80); // sloped connector = ramp
+  assert.equal(edgeCost("normal", 100, { highway: "footway", ramp: "yes", incline: "10.5%" }), 100);
   assert.equal(edgeCost("wheelchair", 100, { highway: "elevator" }), 80);
 });
 

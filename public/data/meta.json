@@ -1,13 +1,13 @@
 {
-  "builtAt": "2026-09-05T00:16:00.177Z",
-  "osmFetchedAt": "2026-09-05T00:00:17.515Z",
+  "builtAt": "2026-09-05T02:50:43.105Z",
+  "osmFetchedAt": "2026-09-05T02:48:41.368Z",
   "graph": {
-    "nodes": 6743,
-    "edges": 7418,
-    "ways": 1448,
-    "connectors": 34,
+    "nodes": 6751,
+    "edges": 7407,
+    "ways": 1479,
+    "connectors": 25,
     "components": 41,
-    "mainComponent": 6103
+    "mainComponent": 6105
   },
   "levels": [
     "0",
@@ -16,23 +16,24 @@
   ],
   "buildings": 583,
   "namedBuildings": 177,
-  "indoor": 192,
-  "features": 238,
+  "indoor": 226,
+  "features": 305,
   "featureKinds": {
-    "entrance": 124,
     "crossing": 4,
+    "entrance": 153,
+    "toilets": 14,
     "drinking_water": 5,
-    "toilets": 11,
-    "other": 23,
+    "other": 54,
+    "elevator": 1,
     "skywalk": 43,
-    "stairs": 26,
-    "ramp": 2
+    "stairs": 27,
+    "ramp": 4
   },
-  "places": 389,
+  "places": 417,
   "rooms": 31,
   "qaIssues": {
-    "high": 41,
-    "medium": 10,
-    "low": 72
+    "high": 44,
+    "medium": 17,
+    "low": 70
   }
 }

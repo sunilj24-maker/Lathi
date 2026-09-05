@@ -302,7 +302,12 @@ function main() {
   // =====================================================================
   const buildings = [];
   const buildingIndex = []; // { id, name, tags, centroid, outlineNodeIds, ring }
-  const registerBuilding = (osmId, tags, rings, outlineNodeIds) => {
+  /**
+   * @param rings          [outerRing, ...holes] of the main polygon
+   * @param outlineNodeIds every node id on any ring (doors can be on courtyard rings)
+   * @param extraOuters    further outer rings (multipolygon with several parts)
+   */
+  const registerBuilding = (osmId, tags, rings, outlineNodeIds, extraOuters = []) => {
     const c = ringCentroid(rings[0]);
     if (!c || !bboxContains(CAMPUS_BBOX, c.lon, c.lat)) return;
     const entranceIds = [...new Set(outlineNodeIds)].filter((id) => nodes.get(id)?.tags?.entrance);
@@ -317,7 +322,7 @@ function main() {
         inAcademicArea: inArea(c.lon, c.lat),
         entrances: entranceIds.length,
       },
-      geometry: rings.length === 1 ? { type: "Polygon", coordinates: rings } : { type: "MultiPolygon", coordinates: rings.map((r) => [r]) },
+      geometry: extraOuters.length ? { type: "MultiPolygon", coordinates: [rings, ...extraOuters.map((r) => [r])] } : { type: "Polygon", coordinates: rings },
     });
     buildingIndex.push({ id: osmId, name: tags.name ?? null, tags, centroid: c, entranceIds, ring: rings[0] });
   };
@@ -326,12 +331,18 @@ function main() {
   for (const rel of relations) {
     const t = rel.tags ?? {};
     if (t.type !== "multipolygon" || !(t.building || (t.amenity && t.name))) continue;
-    const outers = (rel.members ?? []).filter((m) => m.type === "way" && m.role !== "inner").map((m) => waysById.get(m.ref)).filter(Boolean);
+    const memberWays = (rel.members ?? []).filter((m) => m.type === "way").map((m) => ({ role: m.role, way: waysById.get(m.ref) })).filter((m) => m.way);
+    const outers = memberWays.filter((m) => m.role !== "inner").map((m) => m.way);
+    const inners = memberWays.filter((m) => m.role === "inner").map((m) => m.way);
     if (!outers.length) continue;
-    const rings = assembleRings(outers).map((ids) => ids.map((id) => nodes.get(id)).filter(Boolean).map((n) => [round(n.lon), round(n.lat)]));
-    if (!rings.length || rings[0].length < 4) continue;
-    for (const w of outers) relationWayIds.add(w.id);
-    registerBuilding(`relation/${rel.id}`, { building: "yes", ...t }, rings, outers.flatMap((w) => w.nodes));
+    const toCoords = (ids) => ids.map((id) => nodes.get(id)).filter(Boolean).map((n) => [round(n.lon), round(n.lat)]);
+    const outerRings = assembleRings(outers).map(toCoords);
+    if (!outerRings.length || outerRings[0].length < 4) continue;
+    const innerRings = assembleRings(inners).map(toCoords).filter((r) => r.length >= 4);
+    for (const w of [...outers, ...inners]) relationWayIds.add(w.id);
+    // Polygon = outer ring + holes. Doors may sit on a courtyard (inner) ring too.
+    const rings = [outerRings[0], ...innerRings];
+    registerBuilding(`relation/${rel.id}`, { building: "yes", ...t }, rings, memberWays.flatMap((m) => m.way.nodes), outerRings.length > 1 ? outerRings.slice(1) : []);
   }
   for (const way of ways) {
     const tags = way.tags ?? {};
