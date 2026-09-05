@@ -4,11 +4,12 @@ import { edgeCost, parseIncline, parseWidthMeters, FORBIDDEN } from "../src/lib/
 
 const approx = (actual, expected) => assert.ok(Math.abs(actual - expected) < 1e-9, `${actual} ≠ ${expected}`);
 
-test("steps: ×1.2 + 15 m per flight for normal, forbidden for wheelchair unless a ramp runs beside", () => {
+test("steps: ×1.2 + 15 m per flight for normal, never usable for wheelchair", () => {
   assert.equal(edgeCost("normal", 100, { highway: "steps" }), 135);
   assert.equal(edgeCost("normal", 0, { highway: "steps" }), 0); // transfer edge: no penalty
   assert.equal(edgeCost("wheelchair", 100, { highway: "steps" }), FORBIDDEN);
-  approx(edgeCost("wheelchair", 100, { highway: "steps", "ramp:wheelchair": "yes" }), 80); // ramp beside: preferred
+  assert.equal(edgeCost("wheelchair", 100, { highway: "steps", wheelchair: "yes" }), FORBIDDEN);
+  assert.equal(edgeCost("wheelchair", 100, { highway: "steps", "ramp:wheelchair": "yes" }), FORBIDDEN); // draw the ramp as its own way
 });
 
 test("wheelchair=no is forbidden only for the wheelchair profile", () => {

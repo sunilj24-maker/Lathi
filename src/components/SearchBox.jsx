@@ -24,7 +24,8 @@ export default function SearchBox({ places, value, onChange, placeholder, marker
     () =>
       new Fuse(places ?? [], {
         keys: [
-          { name: "name", weight: 0.8 },
+          { name: "name", weight: 0.7 },
+          { name: "aliases", weight: 0.6 },
           { name: "building", weight: 0.15 },
           { name: "category", weight: 0.05 },
         ],
@@ -42,9 +43,13 @@ export default function SearchBox({ places, value, onChange, placeholder, marker
       // Empty query: show Academic Area buildings first as suggestions.
       return places.filter((p) => p.kind === "building" && p.inAcademicArea).slice(0, 8);
     }
-    const hits = fuse.search(q, { limit: 12 }).map((h) => h.item);
+    const qn = q.toLowerCase().replace(/[\s-]/g, "");
+    // Exact alias/name hits first ("lh7" → Lecture Hall 7), then fuzzy matches.
+    const exact = places.filter((p) => p.name.toLowerCase().replace(/[\s-]/g, "") === qn || p.aliases?.some((a) => a.toLowerCase().replace(/[\s-]/g, "") === qn));
+    const hits = fuse.search(q, { limit: 12 }).map((h) => h.item).filter((p) => !exact.includes(p));
     // Prefer buildings and Academic-Area places on ties.
-    return hits.sort((a, b) => Number(b.inAcademicArea) - Number(a.inAcademicArea) || (a.kind === "building" ? -1 : 0) - (b.kind === "building" ? -1 : 0));
+    hits.sort((a, b) => Number(b.inAcademicArea) - Number(a.inAcademicArea) || (a.kind === "building" ? -1 : 0) - (b.kind === "building" ? -1 : 0));
+    return [...exact, ...hits].slice(0, 12);
   }, [query, fuse, places]);
 
   useEffect(() => {

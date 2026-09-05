@@ -1,24 +1,26 @@
 import { useEffect, useMemo, useState } from "react";
-import { FEATURE_KINDS } from "../data/config.js";
+import { FEATURE_KINDS, MAP_MODES, PATH_COLORS } from "../data/config.js";
 import MapView from "./components/MapView.jsx";
 import SearchBox from "./components/SearchBox.jsx";
 import ProfilePicker from "./components/ProfilePicker.jsx";
 import RouteSummary from "./components/RouteSummary.jsx";
 import FloorSwitcher from "./components/FloorSwitcher.jsx";
+import LayerPicker from "./components/LayerPicker.jsx";
 import QaPanel from "./components/QaPanel.jsx";
-import { loadAcademicArea, loadBuildings, loadFeatures, loadIndoor, loadMeta, loadPlaces, loadQa } from "./lib/data.js";
+import { loadAcademicArea, loadBuildings, loadFeatures, loadIndoor, loadMeta, loadPaths, loadPlaces, loadQa } from "./lib/data.js";
 import { loadGraph } from "./lib/routing/graph.js";
 import { computeRoutes, RouteError } from "./lib/routing/route.js";
 import { GROUND } from "./lib/levels.js";
 
 export default function App() {
-  const [data, setData] = useState({ places: null, features: null, buildings: null, indoor: null, academicArea: null, meta: null, qa: null, graph: null });
+  const [data, setData] = useState({ places: null, features: null, buildings: null, indoor: null, paths: null, academicArea: null, meta: null, qa: null, graph: null });
   const [loadError, setLoadError] = useState(null);
 
   const [from, setFrom] = useState(null);
   const [to, setTo] = useState(null);
   const [profile, setProfile] = useState("normal");
   const [level, setLevel] = useState(GROUND);
+  const [mode, setMode] = useState("paths");
 
   const [result, setResult] = useState(null);
   const [routeError, setRouteError] = useState(null);
@@ -35,16 +37,18 @@ export default function App() {
   // ---- load static data + graph -------------------------------------------------------
   useEffect(() => {
     let cancelled = false;
-    Promise.all([loadPlaces(), loadFeatures(), loadBuildings(), loadIndoor(), loadAcademicArea(), loadMeta(), loadQa(), loadGraph()])
-      .then(([places, features, buildings, indoor, academicArea, meta, qa, graph]) => {
+    Promise.all([loadPlaces(), loadFeatures(), loadBuildings(), loadIndoor(), loadPaths(), loadAcademicArea(), loadMeta(), loadQa(), loadGraph()])
+      .then(([places, features, buildings, indoor, paths, academicArea, meta, qa, graph]) => {
         if (cancelled) return;
-        setData({ places, features, buildings, indoor, academicArea, meta, qa, graph });
+        setData({ places, features, buildings, indoor, paths, academicArea, meta, qa, graph });
         const q = new URLSearchParams(window.location.search);
-        const find = (v) => (v ? places.find((p) => p.id === v || p.name.toLowerCase() === v.toLowerCase()) ?? null : null);
+        const norm = (s) => s.toLowerCase().replace(/[\s-]/g, "");
+        const find = (v) => (v ? places.find((p) => p.id === v || norm(p.name) === norm(v) || p.aliases?.some((a) => norm(a) === norm(v))) ?? null : null);
         if (q.get("from")) setFrom(find(q.get("from")));
         if (q.get("to")) setTo(find(q.get("to")));
         if (q.get("profile") === "wheelchair") setProfile("wheelchair");
         if (q.get("level") && graph.levels.includes(q.get("level"))) setLevel(q.get("level"));
+        if (MAP_MODES.some((m) => m.id === q.get("mode"))) setMode(q.get("mode"));
         if (q.get("qa") === "1") setShowQa(true);
       })
       .catch((err) => !cancelled && setLoadError(err.message));
@@ -61,10 +65,11 @@ export default function App() {
     if (to && to.kind !== "point") q.set("to", to.id);
     if (profile !== "normal") q.set("profile", profile);
     if (level !== GROUND) q.set("level", level);
+    if (mode !== "paths") q.set("mode", mode);
     if (showQa) q.set("qa", "1");
     const qs = q.toString();
     window.history.replaceState(null, "", qs ? `?${qs}` : window.location.pathname);
-  }, [data.places, from, to, profile, level, showQa]);
+  }, [data.places, from, to, profile, level, mode, showQa]);
 
   // ---- compute the route whenever inputs change ---------------------------------------
   useEffect(() => {
@@ -110,6 +115,7 @@ export default function App() {
         academicArea={data.academicArea}
         buildings={data.buildings}
         indoor={data.indoor}
+        paths={data.paths}
         features={data.features}
         places={data.places}
         qa={data.qa}
@@ -119,6 +125,7 @@ export default function App() {
         hoveredStep={hoveredStep}
         focus={focus}
         level={level}
+        mode={mode}
         onSetFrom={pick(setFrom)}
         onSetTo={pick(setTo)}
         showFeatures={showFeatures}
@@ -167,8 +174,8 @@ export default function App() {
                 Search a building, room or entrance above, or click anywhere on the map and choose <em>Directions from here</em>.
               </p>
               <p className="hint-small">
-                Detailed accessibility coverage is inside the dashed <span className="legend-swatch academic" /> Academic Area. Use the floor buttons on the right to look at
-                upper floors; routes change floor only via stairs, ramps or lifts.
+                Detailed accessibility coverage is inside the dashed <span className="legend-swatch academic" /> Academic Area. Routes end at the building's door and change floor
+                only via stairs, ramps or lifts. Switch between <em>Buildings</em> and <em>Paths</em> with the boxes at the bottom left.
               </p>
             </div>
           )}
@@ -203,10 +210,29 @@ export default function App() {
               <input type="checkbox" checked={showSnap} onChange={(e) => setShowSnap(e.target.checked)} /> Snap points
             </label>
           </div>
-          {showFeatures && (
+          {mode === "paths" && (
+            <ul className="legend-list legend-paths">
+              <li>
+                <span className="legend-line" style={{ background: PATH_COLORS.ground }} /> Ground paths
+              </li>
+              <li>
+                <span className="legend-line" style={{ background: PATH_COLORS.upper }} /> Level 1+ / skywalks
+              </li>
+              <li>
+                <span className="legend-line" style={{ background: PATH_COLORS.ramp }} /> Ramps
+              </li>
+              <li>
+                <span className="legend-line" style={{ background: PATH_COLORS.stairs }} /> Stairs
+              </li>
+              <li>
+                <span className="legend-line" style={{ background: PATH_COLORS.route }} /> Your route
+              </li>
+            </ul>
+          )}
+          {mode === "paths" && showFeatures && (
             <ul className="legend-list">
               {Object.entries(FEATURE_KINDS)
-                .filter(([k]) => featureCounts[k])
+                .filter(([k]) => featureCounts[k] && k !== "ramp" && k !== "stairs")
                 .map(([k, v]) => (
                   <li key={k}>
                     <span className="legend-swatch" style={{ background: v.color }} /> {v.label}
@@ -248,6 +274,7 @@ export default function App() {
       </aside>
 
       <FloorSwitcher levels={data.graph?.levels} value={level} onChange={setLevel} highlight={result?.main.levels ?? []} />
+      <LayerPicker value={mode} onChange={setMode} />
     </div>
   );
 }

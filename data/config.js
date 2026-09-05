@@ -78,10 +78,27 @@ export const PROFILES = [
   },
 ];
 
+/** Map colours for the paths layer and the route (team palette). */
+export const PATH_COLORS = {
+  ground: "rgb(122, 198, 255)", // paths on level 0
+  upper: "rgb(2, 109, 180)", // paths on level 1+ (skywalks, upper corridors)
+  route: "rgb(255, 0, 255)", // the chosen route
+  ramp: "rgb(255, 237, 90)",
+  stairs: "rgb(255, 176, 55)",
+  elevator: "#0891b2",
+  road: "rgb(122, 198, 255)", // roads are ground paths too, drawn thinner
+};
+
+/** Map layer modes offered by the layer picker. */
+export const MAP_MODES = [
+  { id: "buildings", label: "Buildings", hint: "Base map with building names only" },
+  { id: "paths", label: "Paths", hint: "Every walkable path, coloured by floor" },
+];
+
 /** Accessibility feature kinds we classify from OSM tags, with display styling. */
 export const FEATURE_KINDS = {
-  ramp: { label: "Ramp", color: "#16a34a" },
-  stairs: { label: "Stairs", color: "#dc2626" },
+  ramp: { label: "Ramp", color: "rgb(255, 237, 90)" },
+  stairs: { label: "Stairs", color: "rgb(255, 176, 55)" },
   skywalk: { label: "Skywalk", color: "#7c3aed" },
   crossing: { label: "Crossing", color: "#f59e0b" },
   elevator: { label: "Elevator", color: "#0891b2" },

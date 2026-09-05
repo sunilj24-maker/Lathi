@@ -56,10 +56,10 @@ function turnWord(delta) {
 const turnPhrase = (turn) => turn.replace("-", " ");
 
 function verbFor(turn, kind, label) {
-  if (kind === "skywalk") return turn === "straight" ? `Continue onto the ${label}` : `Turn ${turnPhrase(turn)} onto the ${label}`;
-  if (turn === "straight") return `Continue onto ${label}`;
-  if (turn === "uturn") return `Make a U-turn onto ${label}`;
-  return `Turn ${turnPhrase(turn)} onto ${label}`;
+  const the = kind === "skywalk" ? `the ${label}` : label;
+  if (turn === "straight") return `Continue onto ${the}`;
+  if (turn === "uturn") return `Make a U-turn onto ${the}`;
+  return `Turn ${turnPhrase(turn)} onto ${the}`;
 }
 
 /** "up to Level 1" / "down to Ground" / "to Level 2". */

@@ -4,7 +4,7 @@
 import { PROFILES, RESTRICT_ROUTING_TO_ACADEMIC_AREA, ROAD_HIGHWAYS } from "../../../data/config.js";
 import { pointInGeometry } from "../geo/pointInPolygon.js";
 import { shortestPath } from "./dijkstra.js";
-import { snapCandidates } from "./snap.js";
+import { snapTiers } from "./snap.js";
 import { buildDirections, wayKind } from "./directions.js";
 import { levelLabel } from "../levels.js";
 
@@ -69,31 +69,35 @@ export function computeRoute(graph, from, to, profileId, ctx = {}) {
     }
   }
 
-  const fromCands = snapCandidates(graph, from, profile.id);
-  const toCands = snapCandidates(graph, to, profile.id);
-  if (!fromCands.length) throw new RouteError("no-snap-from", `Could not find a path near "${from.name ?? "the start"}".`);
-  if (!toCands.length) throw new RouteError("no-snap-to", `Could not find a path near "${to.name ?? "the destination"}".`);
+  const fromTiers = snapTiers(graph, from, profile.id);
+  const toTiers = snapTiers(graph, to, profile.id);
+  if (!fromTiers.length) throw new RouteError("no-snap-from", `Could not find a path near "${from.name ?? "the start"}".`);
+  if (!toTiers.length) throw new RouteError("no-snap-to", `Could not find a path near "${to.name ?? "the destination"}".`);
 
-  // Try the best snap pair first; fall back to other entrances/doors if the
-  // first one has no legal way out for this profile (e.g. stairs-only door).
-  let s = fromCands[0];
-  let t = toCands[0];
+  // Tier by tier: a route must end at a real door whenever any door is
+  // reachable for this profile; only if no door works do we fall back to the
+  // nearest path. Within a tier pair, the cheapest legal path wins.
+  let s = fromTiers[0][0];
+  let t = toTiers[0][0];
   let path = null;
-  let best = null;
-  outer: for (const fc of fromCands) {
-    for (const tc of toCands) {
-      const p = shortestPath(graph, fc.nodeId, tc.nodeId, profile.id);
-      if (!p) continue;
-      const total = p.cost + fc.snapDistance + tc.snapDistance;
-      if (!best || total < best.total) best = { p, fc, tc, total };
-      // Exact-door hits on both ends are as good as it gets; stop early.
-      if (fc.snapDistance === 0 && tc.snapDistance === 0) break outer;
+  search: for (const tt of toTiers) {
+    for (const ft of fromTiers) {
+      let best = null;
+      for (const fc of ft) {
+        for (const tc of tt) {
+          const p = shortestPath(graph, fc.nodeId, tc.nodeId, profile.id);
+          if (!p) continue;
+          const total = p.cost + fc.snapDistance + tc.snapDistance;
+          if (!best || total < best.total) best = { p, fc, tc, total };
+        }
+      }
+      if (best) {
+        path = best.p;
+        s = best.fc;
+        t = best.tc;
+        break search;
+      }
     }
-  }
-  if (best) {
-    path = best.p;
-    s = best.fc;
-    t = best.tc;
   }
   if (!path) {
     if (profile.id === "wheelchair") {

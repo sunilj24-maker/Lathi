@@ -77,6 +77,17 @@ Nothing else joins floors: a level-0 and a level-1 corridor that share a node wi
 
 Mapping rules that make this work (full guide in the chat/plan): each floor uses its own nodes; only stairs/ramps/lifts share nodes across floors; entrance nodes sit **on** the building outline and are shared with the corridor or the stairs; `level=a;b` only on connectors.
 
+## Doors, aliases and building rules
+
+- Searching a building routes to **one of its doors**; the router tries every mapped door before it ever falls back to "nearest path". Doors are not listed as separate search entries unless they have their own name.
+- Short forms work: `LH7`, `LH 7`, `L7` → Lecture Hall 7; OSM `short_name` / `alt_name` / `official_name` are indexed too, and a room's number (`202`) finds "Room 202 (Tutorial Block)".
+- `data/routing-rules.json` holds hand-written rules per building. For the Tutorial Block: room floor from the number (1xx → ground, 2xx → level 1) when OSM has no `level`, and fixed arrival doors — wheelchair: node 2734116498 (ground, right side) / node 14152492797 (level 1, right side, via the ramp); normal: any of those or the top door 13657840007.
+- A staircase is never a wheelchair path, whatever it is tagged; a ramp beside stairs must be drawn as its own `ramp=yes` way.
+
+## Map layers and colours
+
+The layer picker (bottom-left) switches between **Buildings** (base map + building names) and **Paths** (every walkable way): ground paths `rgb(122,198,255)`, level 1+ / skywalks `rgb(2,109,180)`, ramps `rgb(255,237,90)`, stairs `rgb(255,176,55)`, the chosen route `rgb(255,0,255)` (with a stairs/ramp-coloured casing on connector sections). Colours live in `PATH_COLORS` in `data/config.js`; the paths come from `public/data/paths.geojson`. URL: `?mode=buildings`.
+
 ## Map data check (QA)
 
 `npm run data:build` also writes `public/data/qa.json`, shown in the site's **Map data check** panel and as dots on the map (`?qa=1`). It flags: disconnected path islands, entrances not on any path, `level=a;b` footways without ramp/stairs tags (they act as free level changes), stairs/ramps ending in mid-air, floors sharing a node without a connector, ramps steeper than 8 %, and Academic-Area buildings with no entrance node. Each item has *View on OSM* and *Open in JOSM* (JOSM Remote Control) links.

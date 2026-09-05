@@ -9,6 +9,7 @@ import {
   INITIAL_ZOOM,
   MAX_ZOOM,
   MIN_ZOOM,
+  PATH_COLORS,
 } from "../../data/config.js";
 import { bboxToBounds, coordsBbox, padBbox } from "../lib/geo/bbox.js";
 import { buildingPlace, pointPlace } from "../lib/data.js";
@@ -32,6 +33,19 @@ function kindColorExpr() {
   return ["match", ["get", "kind"], ...pairs, "#64748b"];
 }
 
+/** Paths layer colour: stairs / ramp / lift by kind, otherwise by floor. */
+const PATH_COLOR_EXPR = [
+  "match",
+  ["get", "kind"],
+  "stairs",
+  PATH_COLORS.stairs,
+  "ramp",
+  PATH_COLORS.ramp,
+  "elevator",
+  PATH_COLORS.elevator,
+  ["case", [">=", ["to-number", ["get", "floor"]], 1], PATH_COLORS.upper, PATH_COLORS.ground],
+];
+
 /** Filter: feature has no level, spans levels, or is on the selected floor. */
 function onFloorFilter(level) {
   return ["any", ["!", ["has", "level"]], ["==", ["get", "level"], null], ["==", ["to-string", ["get", "level"]], level], ["in", ";", ["to-string", ["get", "level"]]]];
@@ -52,6 +66,7 @@ export default function MapView({
   academicArea,
   buildings,
   indoor,
+  paths,
   features,
   places,
   qa,
@@ -61,6 +76,7 @@ export default function MapView({
   hoveredStep,
   focus,
   level = GROUND,
+  mode = "paths",
   onSetFrom,
   onSetTo,
   showFeatures = true,
@@ -98,7 +114,7 @@ export default function MapView({
     map.addControl(new maplibregl.ScaleControl({ maxWidth: 120, unit: "metric" }), "bottom-right");
 
     map.on("load", () => {
-      for (const id of ["mask", "academic-area", "buildings", "indoor", "features", "route-compare", "route", "connectors", "snap", "step", "qa"]) {
+      for (const id of ["mask", "academic-area", "buildings", "indoor", "paths", "features", "route-compare", "route", "connectors", "snap", "step", "qa"]) {
         map.addSource(id, { type: "geojson", data: EMPTY });
       }
 
@@ -136,13 +152,25 @@ export default function MapView({
         filter: ["all", ["==", ["get", "kind"], "room"], onFloorFilter(GROUND)],
         paint: { "line-color": "#b45309", "line-width": 0.8, "line-opacity": 0.8 },
       });
+      // All walkable paths, coloured by floor (ground light blue, upper dark
+      // blue) with ramps yellow and stairs orange. Roads drawn thinner.
       map.addLayer({
-        id: "indoor-corridor",
+        id: "paths-line",
         type: "line",
-        source: "indoor",
-        minzoom: 15.5,
-        filter: ["all", ["==", ["geometry-type"], "LineString"], ["!=", ["get", "kind"], "stairs"], onFloorFilter(GROUND)],
-        paint: { "line-color": "#f59e0b", "line-width": ["interpolate", ["linear"], ["zoom"], 16, 2, 19, 6], "line-opacity": 0.55 },
+        source: "paths",
+        paint: {
+          "line-color": PATH_COLOR_EXPR,
+          "line-width": [
+            "interpolate",
+            ["linear"],
+            ["zoom"],
+            14,
+            ["match", ["get", "kind"], "road", 1, "stairs", 2.5, "ramp", 2.5, 2],
+            18,
+            ["match", ["get", "kind"], "road", 3, "stairs", 7, "ramp", 7, 5],
+          ],
+          "line-opacity": ["match", ["get", "kind"], "road", 0.55, 0.9],
+        },
         layout: { "line-cap": "round", "line-join": "round" },
       });
       map.addLayer({
@@ -196,39 +224,30 @@ export default function MapView({
         paint: { "line-color": "#64748b", "line-width": 4, "line-dasharray": [2, 2], "line-opacity": 0.7 },
         layout: { "line-cap": "round", "line-join": "round" },
       });
-      // Main route: segments on other floors faded + dashed; current floor + connectors solid.
-      map.addLayer({
-        id: "route-other-floor",
-        type: "line",
-        source: "route",
-        filter: ["all", ["!", ["get", "connector"]], ["!=", ["to-string", ["get", "level"]], GROUND]],
-        paint: { "line-color": ["match", ["get", "profile"], "wheelchair", "#0e7490", "#1a73e8"], "line-width": 4, "line-dasharray": [1, 1.5], "line-opacity": 0.45 },
-        layout: { "line-cap": "round", "line-join": "round" },
-      });
+      // The chosen route: magenta on a white casing, on every floor. Stairs and
+      // ramp sections get a thin coloured casing so the connector type is visible.
       map.addLayer({
         id: "route-casing",
         type: "line",
         source: "route",
-        filter: ["any", ["get", "connector"], ["==", ["to-string", ["get", "level"]], GROUND]],
-        paint: { "line-color": "#ffffff", "line-width": ["interpolate", ["linear"], ["zoom"], 14, 6, 18, 12] },
+        paint: {
+          "line-color": ["case", ["get", "connector"], ["match", ["get", "kind"], "stairs", PATH_COLORS.stairs, "ramp", PATH_COLORS.ramp, "elevator", PATH_COLORS.elevator, "#ffffff"], "#ffffff"],
+          "line-width": ["interpolate", ["linear"], ["zoom"], 14, 7, 18, 14],
+        },
         layout: { "line-cap": "round", "line-join": "round" },
       });
       map.addLayer({
         id: "route-line",
         type: "line",
         source: "route",
-        filter: ["any", ["get", "connector"], ["==", ["to-string", ["get", "level"]], GROUND]],
-        paint: {
-          "line-color": ["case", ["get", "connector"], ["match", ["get", "kind"], "stairs", "#dc2626", "ramp", "#16a34a", "elevator", "#0891b2", "#1a73e8"], ["match", ["get", "profile"], "wheelchair", "#0e7490", "#1a73e8"]],
-          "line-width": ["interpolate", ["linear"], ["zoom"], 14, 4, 18, 8],
-        },
+        paint: { "line-color": PATH_COLORS.route, "line-width": ["interpolate", ["linear"], ["zoom"], 14, 4, 18, 8] },
         layout: { "line-cap": "round", "line-join": "round" },
       });
       map.addLayer({
         id: "connectors-line",
         type: "line",
         source: "connectors",
-        paint: { "line-color": "#1a73e8", "line-width": 3, "line-dasharray": [0.6, 1.4], "line-opacity": 0.8 },
+        paint: { "line-color": PATH_COLORS.route, "line-width": 3, "line-dasharray": [0.6, 1.4], "line-opacity": 0.8 },
         layout: { "line-cap": "round" },
       });
 
@@ -409,6 +428,11 @@ export default function MapView({
 
   useEffect(() => {
     const map = mapRef.current;
+    if (loaded && map && paths) map.getSource("paths").setData(paths);
+  }, [loaded, paths]);
+
+  useEffect(() => {
+    const map = mapRef.current;
     if (!loaded || !map) return;
     const fc = qa?.issues
       ? { type: "FeatureCollection", features: qa.issues.map((i, idx) => ({ type: "Feature", id: idx, properties: { ...i, idx }, geometry: { type: "Point", coordinates: [i.lon, i.lat] } })) }
@@ -421,15 +445,18 @@ export default function MapView({
     const map = mapRef.current;
     if (!loaded || !map) return;
     const vis = (id, on) => map.setLayoutProperty(id, "visibility", on ? "visible" : "none");
-    vis("features-point", showFeatures);
-    vis("features-line", showFeatures);
+    // "buildings" mode: base map + building names only. "paths" mode: everything walkable.
+    const pathsMode = mode === "paths";
+    vis("paths-line", pathsMode);
+    vis("features-point", pathsMode && showFeatures);
+    vis("features-line", pathsMode && showFeatures);
     vis("buildings-fill", showBuildings);
     vis("buildings-outline", showBuildings);
     vis("buildings-label", showBuildings);
-    for (const id of ["indoor-room-fill", "indoor-room-outline", "indoor-corridor", "indoor-room-label"]) vis(id, showIndoor);
+    for (const id of ["indoor-room-fill", "indoor-room-outline", "indoor-room-label"]) vis(id, pathsMode && showIndoor);
     vis("qa-point", showQa);
     vis("snap-point", showSnap);
-  }, [loaded, showFeatures, showBuildings, showIndoor, showQa, showSnap]);
+  }, [loaded, mode, showFeatures, showBuildings, showIndoor, showQa, showSnap]);
 
   // ---- floor switch: re-filter indoor, features and route segments ----------------------
   useEffect(() => {
@@ -439,13 +466,18 @@ export default function MapView({
     map.setFilter("indoor-room-fill", ["all", ["==", ["get", "kind"], "room"], floor]);
     map.setFilter("indoor-room-outline", ["all", ["==", ["get", "kind"], "room"], floor]);
     map.setFilter("indoor-room-label", ["all", ["==", ["get", "kind"], "room"], floor]);
-    map.setFilter("indoor-corridor", ["all", ["==", ["geometry-type"], "LineString"], ["!=", ["get", "kind"], "stairs"], floor]);
     map.setFilter("features-line", ["all", ["==", ["geometry-type"], "LineString"], floor]);
     map.setFilter("features-point", ["all", ["==", ["geometry-type"], "Point"], floor]);
-    const onFloor = ["any", ["get", "connector"], ["==", ["to-string", ["get", "level"]], level]];
-    map.setFilter("route-casing", onFloor);
-    map.setFilter("route-line", onFloor);
-    map.setFilter("route-other-floor", ["all", ["!", ["get", "connector"]], ["!=", ["to-string", ["get", "level"]], level]]);
+    // Paths of all floors stay visible (colour tells the floor); the selected
+    // floor is drawn on top by dimming the others slightly.
+    map.setPaintProperty("paths-line", "line-opacity", [
+      "case",
+      ["==", ["get", "kind"], "road"],
+      0.55,
+      ["any", ["==", ["to-string", ["get", "floor"]], level], ["in", ";", ["to-string", ["get", "level"]]]],
+      0.95,
+      0.5,
+    ]);
   }, [loaded, level]);
 
   // ---- from / to pins -----------------------------------------------------------------

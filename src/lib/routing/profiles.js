@@ -85,13 +85,9 @@ function normalEdgeFactor(tags) {
 
 function wheelchairEdgeFactor(tags) {
   if (tags.wheelchair === "no") return FORBIDDEN;
-  if (tags.highway === "steps") {
-    if (tags["ramp:wheelchair"] === "yes" || tags.wheelchair === "yes") {
-      // A step-free ramp runs beside the stairs; treat as a normal path.
-    } else {
-      return FORBIDDEN;
-    }
-  }
+  // A staircase is never a wheelchair path, whatever it is tagged. A ramp that
+  // runs beside stairs must be drawn as its own ramp=yes way.
+  if (tags.highway === "steps") return FORBIDDEN;
   let f = roadFactor(tags);
 
   // A mapped ramp is, by definition, the wheelchair way between levels: always

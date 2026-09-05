@@ -14,7 +14,8 @@ const TURN_ROTATION = {
 };
 
 const KIND_LABEL = { stairs: "Stairs", ramp: "Ramp", elevator: "Lift", skywalk: "Skywalk", crossing: "Cross", indoor: "Indoor" };
-const KIND_COLOR = { stairs: "#dc2626", ramp: "#16a34a", elevator: "#0891b2", skywalk: "#7c3aed", crossing: "#f59e0b", indoor: "#64748b" };
+// Team palette (stairs orange, ramp yellow) darkened slightly for legibility on white.
+const KIND_COLOR = { stairs: "rgb(226, 140, 20)", ramp: "rgb(190, 165, 0)", elevator: "#0891b2", skywalk: "rgb(2, 109, 180)", crossing: "#f59e0b", indoor: "#64748b" };
 
 function Arrow({ rotation = 0, color = "currentColor" }) {
   return (

@@ -27,7 +27,7 @@
  */
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { join } from "node:path";
-import { CAMPUS_BBOX, ROUTABLE_HIGHWAYS } from "../data/config.js";
+import { CAMPUS_BBOX, ROAD_HIGHWAYS, ROUTABLE_HIGHWAYS } from "../data/config.js";
 import { haversineMeters } from "../src/lib/geo/haversine.js";
 import { pointInGeometry, ringCentroid } from "../src/lib/geo/pointInPolygon.js";
 import { bboxContains } from "../src/lib/geo/bbox.js";
@@ -62,6 +62,13 @@ function loadOverrides() {
   const out = {};
   for (const [k, v] of Object.entries(raw)) if (!k.startsWith("_")) out[k] = v;
   return out;
+}
+
+function loadRoutingRules() {
+  const p = join(ROOT, "data/routing-rules.json");
+  if (!existsSync(p)) return { buildings: {} };
+  const raw = JSON.parse(readFileSync(p, "utf8"));
+  return { buildings: raw.buildings ?? {} };
 }
 
 function loadAcademicArea() {
@@ -352,6 +359,23 @@ function main() {
     registerBuilding(`way/${way.id}`, tags, [coords], way.nodes);
   }
 
+  // Doors on *any* way tagged building=* + the same name (e.g. a split-off
+  // piece of an outline) count as doors of that building too.
+  {
+    const byName = new Map(buildingIndex.filter((b) => b.name).map((b) => [b.name.toLowerCase(), b]));
+    for (const way of ways) {
+      const t = way.tags ?? {};
+      if (!t.building || !t.name) continue;
+      const b = byName.get(t.name.toLowerCase());
+      if (!b) continue;
+      for (const id of way.nodes) if (nodes.get(id)?.tags?.entrance && !b.entranceIds.includes(id)) b.entranceIds.push(id);
+    }
+    for (const f of buildings) {
+      const b = buildingIndex.find((x) => x.id === f.properties.osmId);
+      if (b) f.properties.entrances = b.entranceIds.length;
+    }
+  }
+
   const buildingContaining = (lon, lat) => buildingIndex.find((b) => b.name && pointInGeometry(lon, lat, { type: "Polygon", coordinates: [b.ring] }));
   const nearestBuildingName = (lon, lat, maxM = 60) => {
     let best = null;
@@ -401,6 +425,40 @@ function main() {
   }
 
   // =====================================================================
+  // 3b. Paths layer: every routable way, coloured by floor / kind in the UI
+  // =====================================================================
+  const pathKind = (t) => {
+    if (t.highway === "steps") return "stairs";
+    if (t.highway === "elevator") return "elevator";
+    if (t.ramp === "yes" || t["ramp:wheelchair"] === "yes" || (t.highway !== "steps" && isMultiLevel(t))) return "ramp";
+    if (ROAD_HIGHWAYS.has(t.highway)) return "road";
+    return "path";
+  };
+  const paths = [];
+  for (const way of ways) {
+    const t = way.tags ?? {};
+    if (!graphWays[way.id]) continue;
+    const coords = wayCoords(way, nodes);
+    if (coords.length < 2) continue;
+    const levels = parseLevels(t.level);
+    paths.push({
+      type: "Feature",
+      properties: {
+        osmId: `way/${way.id}`,
+        kind: pathKind(t),
+        highway: t.highway,
+        name: t.name ?? null,
+        level: t.level ?? GROUND,
+        // numeric floor used for colouring: connectors take their upper floor
+        floor: Math.max(...levels.map(Number).filter(Number.isFinite), 0),
+        bridge: t.bridge === "yes",
+        wheelchair: t.wheelchair ?? null,
+      },
+      geometry: { type: "LineString", coordinates: coords },
+    });
+  }
+
+  // =====================================================================
   // 4. Accessibility features
   // =====================================================================
   const features = [];
@@ -445,33 +503,74 @@ function main() {
   // =====================================================================
   const places = [];
   const seenName = new Set();
+  const rules = loadRoutingRules();
 
+  /** Search aliases: OSM alternative names + generated short forms ("LH7", "LH 7", "L7"). */
+  const aliasesFor = (tags) => {
+    const out = new Set();
+    for (const k of ["short_name", "alt_name", "official_name", "old_name", "name:en", "loc_name", "nickname"]) {
+      if (tags[k]) for (const v of String(tags[k]).split(";")) if (v.trim()) out.add(v.trim());
+    }
+    const m = (tags.name ?? "").match(/^Lecture Hall\s*(\d+)$/i);
+    if (m) for (const a of [`LH${m[1]}`, `LH ${m[1]}`, `L${m[1]}`, `L-${m[1]}`, `LH-${m[1]}`]) out.add(a);
+    const r = (tags.name ?? "").match(/^Room\s+(\S+)$/i);
+    if (r) out.add(r[1]);
+    return [...out].filter((a) => a.toLowerCase() !== (tags.name ?? "").toLowerCase());
+  };
+
+  /** Resolve a rules entry's door node ids to graph keys, per profile and floor. */
+  const doorRulesFor = (rule) => {
+    if (!rule?.doors) return null;
+    const out = {};
+    for (const [profile, byLevel] of Object.entries(rule.doors)) {
+      out[profile] = {};
+      for (const [level, ids] of Object.entries(byLevel)) {
+        const keys = ids.flatMap((osmId) => keysOfNode(Number(String(osmId).replace("node/", ""))));
+        if (keys.length) out[profile][level] = keys;
+      }
+    }
+    return out;
+  };
+
+  const buildingsWithSearchableEntrances = new Set();
   for (const b of buildingIndex) {
     if (!b.name) continue;
     const key = b.name.toLowerCase();
     if (seenName.has(key)) continue;
     seenName.add(key);
-    places.push({
+    const rule = rules.buildings[b.id];
+    const entrances = b.entranceIds.map((id) => {
+      const n = nodes.get(id);
+      return { id: String(id), lon: round(n.lon), lat: round(n.lat), type: n.tags.entrance, level: n.tags.level ?? null, wheelchair: n.tags.wheelchair ?? null, keys: keysOfNode(id) };
+    });
+    if (entrances.some((e) => e.keys.length)) buildingsWithSearchableEntrances.add(b.id);
+    const place = {
       id: b.id,
       name: b.name,
+      aliases: aliasesFor(b.tags),
       kind: "building",
       category: b.tags.amenity ?? b.tags.building ?? null,
       lon: round(b.centroid.lon),
       lat: round(b.centroid.lat),
       inAcademicArea: inArea(b.centroid.lon, b.centroid.lat),
       snapNodes: b.entranceIds.flatMap(keysOfNode),
-      entrances: b.entranceIds.map((id) => {
-        const n = nodes.get(id);
-        return { id: String(id), lon: round(n.lon), lat: round(n.lat), type: n.tags.entrance, level: n.tags.level ?? null, wheelchair: n.tags.wheelchair ?? null, keys: keysOfNode(id) };
-      }),
-    });
+      entrances,
+    };
+    const doorRules = doorRulesFor(rule);
+    if (doorRules) place.doorRules = doorRules;
+    places.push(place);
   }
 
   for (const n of nodes.values()) {
     const t = n.tags;
     if (!t || !inCampus(n)) continue;
     if (t.entrance) {
-      const host = buildingIndex.find((b) => b.entranceIds.includes(n.id))?.name ?? nearestBuildingName(n.lon, n.lat);
+      const hostB = buildingIndex.find((b) => b.entranceIds.includes(n.id));
+      // A building's own doors are reached by searching the building itself
+      // (the router picks the door). Only list a door separately when it has a
+      // name of its own or belongs to no searchable building.
+      if (hostB && buildingsWithSearchableEntrances.has(hostB.id) && !t.name) continue;
+      const host = hostB?.name ?? nearestBuildingName(n.lon, n.lat);
       const label = t.name || (host ? `${host} — ${t.entrance === "main" ? "main entrance" : "entrance"}${t.level != null && t.level !== "0" ? ` (level ${t.level})` : ""}` : null);
       if (!label) continue;
       places.push({
@@ -512,19 +611,29 @@ function main() {
     const coords = wayCoords(way, nodes);
     const c = ringCentroid(coords);
     if (!c || !bboxContains(CAMPUS_BBOX, c.lon, c.lat)) continue;
-    const level = parseLevels(t.level)[0];
-    const host = buildingContaining(c.lon, c.lat)?.name ?? nearestBuildingName(c.lon, c.lat, 80);
+    const hostBuilding = buildingContaining(c.lon, c.lat) ?? null;
+    const host = hostBuilding?.name ?? nearestBuildingName(c.lon, c.lat, 80);
+    const rule = hostBuilding ? rules.buildings[hostBuilding.id] : null;
     const rawName = t.name ?? t.ref;
-    const base = /^[\dA-Za-z]?-?\d+[A-Za-z]?$/.test(rawName) ? `Room ${rawName}` : rawName;
+    const isNumber = /^[\dA-Za-z]?-?\d+[A-Za-z]?$/.test(rawName);
+    // Floor: OSM level tag, else (per building rule) the room number's first digit: 1xx -> 0, 2xx -> 1.
+    let level = t.level != null ? parseLevels(t.level)[0] : null;
+    if (level == null && rule?.roomLevelFromNumber && isNumber) {
+      const digits = rawName.match(/\d+/)[0];
+      if (digits.length >= 3) level = String(Number(digits[0]) - 1);
+    }
+    level ??= GROUND;
+    const base = isNumber ? `Room ${rawName}` : rawName;
     const name = host && !base.toLowerCase().includes(host.toLowerCase()) ? `${base} (${host})` : base;
     const key = name.toLowerCase();
     if (seenName.has(key)) continue;
     seenName.add(key);
     // Doors / outline nodes that sit on the routing graph at this level.
     const snapNodes = way.nodes.map((id) => nodeKey(id, level)).filter((k) => graphNodes[k]);
-    places.push({
+    const place = {
       id: `way/${way.id}`,
       name,
+      aliases: aliasesFor({ ...t, name: base }),
       kind: "room",
       category: t.indoor,
       lon: round(c.lon),
@@ -533,7 +642,10 @@ function main() {
       building: host ?? null,
       inAcademicArea: inArea(c.lon, c.lat),
       snapNodes,
-    });
+    };
+    const doorRules = doorRulesFor(rule);
+    if (doorRules) place.doorRules = doorRules;
+    places.push(place);
   }
 
   // Named non-building areas (sports grounds, parks, …)
@@ -661,6 +773,7 @@ function main() {
   writeFileSync(join(OUT_DIR, "graph.json"), JSON.stringify(graph));
   writeFileSync(join(OUT_DIR, "buildings.geojson"), JSON.stringify({ type: "FeatureCollection", features: buildings }));
   writeFileSync(join(OUT_DIR, "indoor.geojson"), JSON.stringify({ type: "FeatureCollection", features: indoor }));
+  writeFileSync(join(OUT_DIR, "paths.geojson"), JSON.stringify({ type: "FeatureCollection", features: paths }));
   writeFileSync(join(OUT_DIR, "features.geojson"), JSON.stringify({ type: "FeatureCollection", features }));
   writeFileSync(join(OUT_DIR, "places.json"), JSON.stringify(places));
   writeFileSync(join(OUT_DIR, "qa.json"), JSON.stringify(qa, null, 1));

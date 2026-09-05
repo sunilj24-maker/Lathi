@@ -18,6 +18,7 @@ export const loadBuildings = () => once("buildings", () => getJson("/data/buildi
 export const loadAcademicArea = () => once("academic", () => getJson("/data/academic-area.geojson"));
 export const loadMeta = () => once("meta", () => getJson("/data/meta.json").catch(() => null));
 export const loadIndoor = () => once("indoor", () => getJson("/data/indoor.geojson").catch(() => null));
+export const loadPaths = () => once("paths", () => getJson("/data/paths.geojson").catch(() => null));
 export const loadQa = () => once("qa", () => getJson("/data/qa.json").catch(() => null));
 
 /** Build a place-like object from a raw map click (on the floor being viewed). */
