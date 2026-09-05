@@ -52,12 +52,32 @@ OpenStreetMap  ──npm run data:fetch──▶  data/raw/iitk.osm.json  ──
 
 | File | Contents |
 |---|---|
-| `graph.json` | Routing graph: `nodes` (`id → [lon, lat]`), `edges` (`[from, to, metres, wayId]`), `ways` (tags per way), `nodeTags` (crossings, kerbs, barriers, entrances) |
-| `buildings.geojson` | Building footprints with name, levels, entrance count, `inAcademicArea` |
-| `features.geojson` | Accessibility features: ramps, stairs, skywalks, crossings, elevators, entrances, benches, rest areas, toilets, drinking water |
-| `places.json` | Search index: named buildings (with entrance nodes), entrances, landmarks |
+| `graph.json` | Level-aware routing graph: `nodes` (`"<osmId>@<level>" → [lon, lat, level]`), `edges` (`[from, to, metres, wayId]`), `ways` (tags per way, plus synthetic `elev<nodeId>` lifts), `nodeTags` |
+| `buildings.geojson` | Building footprints (closed ways **and** multipolygon relations) with name, floors, entrance count, `inAcademicArea` |
+| `indoor.geojson` | Corridors, rooms and doors with their `level`, for the floor switcher |
+| `features.geojson` | Accessibility features: ramps, stairs, skywalks, crossings, lifts, entrances, benches, rest areas, toilets, drinking water |
+| `places.json` | Search index: buildings (with entrance nodes), entrances, **rooms** (e.g. "Room 201 (Tutorial Block)", "Lecture Hall 9"), landmarks |
+| `qa.json` | Data-quality issues for the mapping team (see below) |
 | `academic-area.geojson` | Hand-drawn detailed-coverage polygon (edit by hand) |
 | `meta.json` | Counts and snapshot timestamp shown in the UI footer |
+
+## Floors and level changes
+
+Every graph node is `"<osmNodeId>@<level>"`. A way tagged `level=1` connects its nodes on floor 1 only; outdoor ways without a `level` tag are floor 0. Two floors are joined **only** through:
+
+| Connector in OSM | Who can use it |
+|---|---|
+| `highway=steps` + `level=0;1` | Normal only (forbidden for wheelchair unless `ramp:wheelchair=yes`) |
+| `highway=footway` + `ramp=yes` + `incline=6%` + `level=0;1` | Both; cost depends on incline |
+| node `highway=elevator` + `level=0;1;2` | Both (×0.8 for wheelchair, +20 s wait for normal) |
+
+Nothing else joins floors: a level-0 and a level-1 corridor that share a node without stairs there is a wall. The router picks whichever connector makes the whole trip cheapest, so "use the nearest ramp" falls out of the shortest-path search. Directions say "Take the stairs up to Level 1 (14 steps)", "Take the ramp down to Ground (6%)", "Take the lift to Level 2". The floor switcher (G / 1 / 2) on the map filters indoor rooms, corridors and features; the route is drawn solid on the selected floor and dashed on other floors.
+
+Mapping rules that make this work (full guide in the chat/plan): each floor uses its own nodes; only stairs/ramps/lifts share nodes across floors; entrance nodes sit **on** the building outline and are shared with the corridor or the stairs; `level=a;b` only on connectors.
+
+## Map data check (QA)
+
+`npm run data:build` also writes `public/data/qa.json`, shown in the site's **Map data check** panel and as dots on the map (`?qa=1`). It flags: disconnected path islands, entrances not on any path, `level=a;b` footways without ramp/stairs tags (they act as free level changes), stairs/ramps ending in mid-air, floors sharing a node without a connector, ramps steeper than 8 %, and Academic-Area buildings with no entrance node. Each item has *View on OSM* and *Open in JOSM* (JOSM Remote Control) links.
 
 ## Routing rules
 
@@ -82,10 +102,10 @@ Routing currently works across the whole campus using whatever OSM already has; 
 
 ## Using the site
 
-- Search a building/entrance/landmark in **A** and **B**, or click anywhere on the map → *Directions from here / to here*. Clicking a building or feature shows its accessibility attributes and last-checked date.
-- Hover a direction step to highlight it on the map; click it to zoom there.
-- Links are shareable: `/?from=way/123&to=Rajeev%20Motwani%20Building&profile=wheelchair` (ids or names both work).
-- Layer toggles for buildings and accessibility features are at the bottom of the panel.
+- Search a building/room/entrance/landmark in **A** and **B**, or click anywhere on the map → *Directions from here / to here* (a click on an upper floor drops the pin on that floor). Clicking a building, room or feature shows its attributes, floor and last-checked date.
+- Hover a direction step to highlight it on the map; click it to zoom there and switch to that floor.
+- Links are shareable: `/?from=way/123&to=Rajeev%20Motwani%20Building&profile=wheelchair&level=1` (ids or names both work).
+- Layer toggles (buildings, indoor, features, snap points) are at the bottom of the panel. *Snap points* shows exactly where each endpoint joined the path network, useful when a route starts somewhere unexpected.
 
 ## Repository layout
 
@@ -94,11 +114,13 @@ Routing currently works across the whole campus using whatever OSM already has; 
 ├── index.html, vite.config.js
 ├── src/
 │   ├── main.jsx, App.jsx, styles.css
-│   ├── components/      MapView, SearchBox, ProfilePicker, FeaturePopup, RouteSummary
+│   ├── components/      MapView, SearchBox, ProfilePicker, FeaturePopup, RouteSummary, FloorSwitcher, QaPanel, QaPopup
 │   └── lib/
 │       ├── routing/     graph, profiles, dijkstra (A*), snap, directions, route
 │       ├── geo/         haversine, pointInPolygon, bbox
+│       ├── levels.js    level parsing, node keys, labels
 │       ├── features.js  OSM tags → feature kind
+│       ├── osmLinks.js  OSM / JOSM remote-control links
 │       └── data.js      loaders
 ├── scripts/
 │   ├── fetch-osm.mjs    Overpass / OSM API → data/raw/iitk.osm.json
@@ -116,6 +138,6 @@ Routing currently works across the whole campus using whatever OSM already has; 
 
 ## Current OSM coverage (snapshot in repo)
 
-167 named buildings, 79 entrances, 6,443 routable path points — but only 5 staircases, 4 crossings and **no** ramps, benches, elevators or kerb/incline/width tags yet. Until the survey adds them, Normal and Wheelchair routes will mostly coincide; the engine already applies every rule as soon as the tags appear in OSM.
+177 named buildings (incl. 5 multipolygons such as P K Kelkar Library), 124 entrances, 31 searchable rooms, 6,743 path points on 3 floors, 26 staircases, 2 ramps, 43 elevated walkways, **no lifts yet**, 4 crossings, and almost no kerb/width/surface tags. The Lecture Hall Complex and Tutorial Block have indoor corridors on levels 0–1. The *Map data check* panel lists what still needs fixing in JOSM (dead-end stairs, `level=1;0` footways that should be `level=1`, unconnected entrances at LH16–20, …).
 
 Data © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors, ODbL.

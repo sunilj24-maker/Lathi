@@ -17,15 +17,18 @@ export const loadFeatures = () => once("features", () => getJson("/data/features
 export const loadBuildings = () => once("buildings", () => getJson("/data/buildings.geojson"));
 export const loadAcademicArea = () => once("academic", () => getJson("/data/academic-area.geojson"));
 export const loadMeta = () => once("meta", () => getJson("/data/meta.json").catch(() => null));
+export const loadIndoor = () => once("indoor", () => getJson("/data/indoor.geojson").catch(() => null));
+export const loadQa = () => once("qa", () => getJson("/data/qa.json").catch(() => null));
 
-/** Build a place-like object from a raw map click. */
-export function pointPlace(lon, lat, label) {
+/** Build a place-like object from a raw map click (on the floor being viewed). */
+export function pointPlace(lon, lat, label, level = "0") {
   return {
-    id: `point/${lon.toFixed(5)},${lat.toFixed(5)}`,
+    id: `point/${lon.toFixed(5)},${lat.toFixed(5)}@${level}`,
     name: label ?? `Dropped pin (${lat.toFixed(4)}, ${lon.toFixed(4)})`,
     kind: "point",
     lon,
     lat,
+    level: level ?? "0",
   };
 }
 

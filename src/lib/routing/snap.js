@@ -1,67 +1,73 @@
-/**
- * Snap a place or an arbitrary map point onto the routing graph.
+﻿/**
+ * Snap a place or an arbitrary map point onto the (level-aware) routing graph.
  *
- * Preference order for a building:
- *   1. an entrance node that is itself part of the graph
- *   2. the graph node nearest to any of its entrances
- *   3. the graph node nearest to the building centroid
- * For everything else: nearest graph node to the point.
+ * Preference order for a building / room / entrance:
+ *   1. one of its own graph nodes (`snapNodes`: entrance / door nodes that lie on a path)
+ *      â€” for the wheelchair profile, entrances tagged wheelchair=no are skipped
+ *   2. the graph node nearest to any of its entrances, on the entrance's floor
+ *   3. the graph node nearest to the place itself, on the place's floor (rooms)
+ *      or on the ground floor (everything else), then on any floor
  */
 import { SNAP_MAX_METERS } from "../../../data/config.js";
-import { haversineMeters } from "../geo/haversine.js";
+import { GROUND, splitKey } from "../levels.js";
+
+/** Best single snap for a place (first candidate). */
+export function snapPlace(graph, place, profileId = "normal") {
+  return snapCandidates(graph, place, profileId, 1)[0] ?? null;
+}
 
 /**
- * @param {import('./graph.js').Graph} graph
- * @param {{ lon: number, lat: number, nodeId?: string|null, entranceNodeIds?: string[], entrances?: Array<{id:string,lon:number,lat:number}> }} place
- * @param {string} [profileId]
- * @returns {{ nodeId: string, snapDistance: number, via: 'node'|'entrance'|'near-entrance'|'nearest', anchor: [number, number] } | null}
+ * All reasonable snap candidates for a place, best first. The router tries
+ * them in order, so a building whose first entrance only opens onto a
+ * staircase still gets a wheelchair route through its other door.
  */
-export function snapPlace(graph, place, profileId = "normal") {
-  if (place.nodeId && graph.has(place.nodeId)) {
-    return { nodeId: place.nodeId, snapDistance: 0, via: "node", anchor: [place.lon, place.lat] };
-  }
-
+export function snapCandidates(graph, place, profileId = "normal", limit = 6) {
   const wheelchair = profileId === "wheelchair";
-  const usableEntrance = (e) => !(wheelchair && e.wheelchair === "no");
-
-  // 1. Entrance nodes already on the graph.
-  const onGraph = (place.entranceNodeIds ?? []).filter((id) => graph.has(id));
-  if (onGraph.length) {
-    const entrances = place.entrances ?? [];
-    const pick =
-      onGraph.find((id) => {
-        const e = entrances.find((x) => x.id === id);
-        return e ? usableEntrance(e) && e.type === "main" : false;
-      }) ?? onGraph[0];
-    const e = entrances.find((x) => x.id === pick);
-    return { nodeId: pick, snapDistance: 0, via: "entrance", anchor: e ? [e.lon, e.lat] : graph.coord(pick) };
-  }
-
-  // 2. Nearest graph node to any entrance.
-  let best = null;
-  for (const e of place.entrances ?? []) {
-    if (!usableEntrance(e)) continue;
-    const hit = graph.nearestNode(e.lon, e.lat, SNAP_MAX_METERS);
-    if (hit && (!best || hit.distance < best.snapDistance)) {
-      best = { nodeId: hit.nodeId, snapDistance: hit.distance, via: "near-entrance", anchor: [e.lon, e.lat] };
+  const usable = (e) => !(wheelchair && e.wheelchair === "no");
+  const out = [];
+  const seen = new Set();
+  const push = (c) => {
+    if (c && !seen.has(c.nodeId)) {
+      seen.add(c.nodeId);
+      out.push(c);
     }
+  };
+
+  if (place.nodeId && graph.has(place.nodeId)) {
+    push({ nodeId: place.nodeId, snapDistance: 0, via: "node", anchor: [place.lon, place.lat], level: graph.levelOf(place.nodeId) });
   }
-  if (best) return best;
+  const entrances = [...(place.entrances ?? [])].filter(usable).sort((a, b) => (b.type === "main") - (a.type === "main"));
+  for (const e of entrances) {
+    const keys = (e.keys ?? []).filter((k) => graph.has(k));
+    // floor nodes first, connector nodes after
+    keys.sort((a, b) => graph.isConnectorNode(a) - graph.isConnectorNode(b));
+    const doorLevel = e.level != null && !String(e.level).includes(";") ? String(e.level) : null;
+    for (const k of keys) push({ nodeId: k, snapDistance: 0, via: "entrance", anchor: [e.lon, e.lat], level: graph.isConnectorNode(k) && doorLevel ? doorLevel : graph.levelOf(k) });
+  }
+  const own = (place.snapNodes ?? []).filter((k) => graph.has(k)).sort((a, b) => graph.isConnectorNode(a) - graph.isConnectorNode(b));
+  for (const k of own) push({ nodeId: k, snapDistance: 0, via: place.kind === "room" ? "door" : "entrance", anchor: [place.lon, place.lat], level: graph.levelOf(k) });
 
-  // 3. Nearest graph node to the point itself.
-  const hit = graph.nearestNode(place.lon, place.lat, SNAP_MAX_METERS);
+  for (const e of entrances) {
+    const level = e.level != null && !String(e.level).includes(";") ? String(e.level) : GROUND;
+    const hit = graph.nearestNode(e.lon, e.lat, { level, maxMeters: SNAP_MAX_METERS });
+    if (hit) push({ nodeId: hit.nodeId, snapDistance: hit.distance, via: "near-entrance", anchor: [e.lon, e.lat], level: graph.levelOf(hit.nodeId) });
+  }
+  const wantLevel = place.level != null && !String(place.level).includes(";") ? String(place.level) : GROUND;
+  const hitLevel = graph.nearestNode(place.lon, place.lat, { level: wantLevel, maxMeters: place.kind === "room" ? 60 : SNAP_MAX_METERS });
+  if (hitLevel) push({ nodeId: hitLevel.nodeId, snapDistance: hitLevel.distance, via: "nearest", anchor: [place.lon, place.lat], level: graph.levelOf(hitLevel.nodeId) });
+  const hitAny = graph.nearestNode(place.lon, place.lat, { maxMeters: SNAP_MAX_METERS, filter: (k) => !graph.isConnectorNode(k) });
+  if (hitAny) push({ nodeId: hitAny.nodeId, snapDistance: hitAny.distance, via: "nearest", anchor: [place.lon, place.lat], level: graph.levelOf(hitAny.nodeId) });
+
+  return out.slice(0, limit);
+}
+
+/** Snap a raw map click, preferring the floor the user is looking at. */
+export function snapPoint(graph, lon, lat, level = GROUND) {
+  const hit =
+    graph.nearestNode(lon, lat, { level, maxMeters: SNAP_MAX_METERS }) ??
+    graph.nearestNode(lon, lat, { maxMeters: SNAP_MAX_METERS, filter: (k) => !graph.isConnectorNode(k) });
   if (!hit) return null;
-  return { nodeId: hit.nodeId, snapDistance: hit.distance, via: "nearest", anchor: [place.lon, place.lat] };
+  return { nodeId: hit.nodeId, snapDistance: hit.distance, via: "nearest", anchor: [lon, lat], level: graph.levelOf(hit.nodeId) };
 }
 
-/** Snap a raw map click. */
-export function snapPoint(graph, lon, lat) {
-  const hit = graph.nearestNode(lon, lat, SNAP_MAX_METERS);
-  if (!hit) return null;
-  return { nodeId: hit.nodeId, snapDistance: hit.distance, via: "nearest", anchor: [lon, lat] };
-}
-
-/** Straight-line distance between two places (for sanity messages). */
-export function placeDistance(a, b) {
-  return haversineMeters(a.lat, a.lon, b.lat, b.lon);
-}
+export { splitKey };

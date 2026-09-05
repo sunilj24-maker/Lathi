@@ -4,9 +4,9 @@
 import { PROFILES, RESTRICT_ROUTING_TO_ACADEMIC_AREA, ROAD_HIGHWAYS } from "../../../data/config.js";
 import { pointInGeometry } from "../geo/pointInPolygon.js";
 import { shortestPath } from "./dijkstra.js";
-import { snapPlace } from "./snap.js";
-import { buildDirections } from "./directions.js";
-import { classifyFeature } from "../features.js";
+import { snapCandidates } from "./snap.js";
+import { buildDirections, wayKind } from "./directions.js";
+import { levelLabel } from "../levels.js";
 
 export class RouteError extends Error {
   constructor(code, message) {
@@ -29,16 +29,15 @@ function summarise(graph, nodeIds, wayIds) {
     else footM += len;
     if (!seen.has(wayId)) {
       seen.add(wayId);
-      const kind = classifyFeature(tags);
-      if (kind && kind in counts) counts[kind] += 1;
+      const kind = wayKind(tags);
+      if (kind in counts) counts[kind] += 1;
     }
-    surfaces[tags.surface ?? "unknown"] = (surfaces[tags.surface ?? "unknown"] ?? 0) + len;
+    if (len > 0) surfaces[tags.surface ?? "unknown"] = (surfaces[tags.surface ?? "unknown"] ?? 0) + len;
   });
-  // Crossings are usually nodes, not ways.
+  // Crossings are usually nodes, not ways. (Lifts are counted via their synthetic ways above.)
   for (let i = 1; i < nodeIds.length - 1; i++) {
     const t = graph.tagsOfNode(nodeIds[i]);
     if (t?.highway === "crossing") counts.crossing += 1;
-    if (t?.highway === "elevator") counts.elevator += 1;
   }
   return { counts, surfaces, roadM, footM };
 }
@@ -70,21 +69,76 @@ export function computeRoute(graph, from, to, profileId, ctx = {}) {
     }
   }
 
-  const s = snapPlace(graph, from, profile.id);
-  const t = snapPlace(graph, to, profile.id);
-  if (!s) throw new RouteError("no-snap-from", `Could not find a path near "${from.name ?? "the start"}".`);
-  if (!t) throw new RouteError("no-snap-to", `Could not find a path near "${to.name ?? "the destination"}".`);
+  const fromCands = snapCandidates(graph, from, profile.id);
+  const toCands = snapCandidates(graph, to, profile.id);
+  if (!fromCands.length) throw new RouteError("no-snap-from", `Could not find a path near "${from.name ?? "the start"}".`);
+  if (!toCands.length) throw new RouteError("no-snap-to", `Could not find a path near "${to.name ?? "the destination"}".`);
 
-  const path = shortestPath(graph, s.nodeId, t.nodeId, profile.id);
+  // Try the best snap pair first; fall back to other entrances/doors if the
+  // first one has no legal way out for this profile (e.g. stairs-only door).
+  let s = fromCands[0];
+  let t = toCands[0];
+  let path = null;
+  let best = null;
+  outer: for (const fc of fromCands) {
+    for (const tc of toCands) {
+      const p = shortestPath(graph, fc.nodeId, tc.nodeId, profile.id);
+      if (!p) continue;
+      const total = p.cost + fc.snapDistance + tc.snapDistance;
+      if (!best || total < best.total) best = { p, fc, tc, total };
+      // Exact-door hits on both ends are as good as it gets; stop early.
+      if (fc.snapDistance === 0 && tc.snapDistance === 0) break outer;
+    }
+  }
+  if (best) {
+    path = best.p;
+    s = best.fc;
+    t = best.tc;
+  }
   if (!path) {
     if (profile.id === "wheelchair") {
+      const walk = shortestPath(graph, s.nodeId, t.nodeId, "normal");
+      if (walk) {
+        const usesStairs = walk.wayIds.some((w) => graph.wayTags(w).highway === "steps");
+        throw new RouteError(
+          "no-route",
+          usesStairs
+            ? "No step-free route known yet between these points: every mapped connection uses stairs, and no ramp or lift is mapped."
+            : "No wheelchair-accessible route known yet between these points.",
+        );
+      }
       throw new RouteError("no-route", "No step-free route known yet between these points.");
     }
-    throw new RouteError("no-route", "No walking route found between these points.");
+    throw new RouteError(
+      "no-route",
+      s.level !== t.level
+        ? `No walking route found: the start (${levelLabel(s.level)}) and destination (${levelLabel(t.level)}) are on different floors and no stairs, ramp or lift connects them in the map yet.`
+        : "No walking route found between these points — the paths may not be connected in OpenStreetMap yet.",
+    );
   }
 
   const coords = path.nodeIds.map((id) => graph.coord(id));
   const line = { type: "Feature", properties: { profile: profile.id }, geometry: { type: "LineString", coordinates: coords } };
+
+  // Per-floor segments so the map can dim the parts on other floors.
+  const segments = [];
+  let seg = null;
+  for (let i = 0; i < path.nodeIds.length - 1; i++) {
+    const a = path.nodeIds[i];
+    const b = path.nodeIds[i + 1];
+    const la = graph.levelOf(a);
+    const lb = graph.levelOf(b);
+    const tags = graph.wayTags(path.wayIds[i]);
+    const kind = wayKind(tags);
+    const level = la.includes(";") ? la : lb.includes(";") ? lb : la === lb ? la : `${la};${lb}`;
+    const isConnector = level.includes(";") || kind === "elevator";
+    if (!seg || seg.properties.level !== level || seg.properties.connector !== isConnector) {
+      seg = { type: "Feature", properties: { profile: profile.id, level, connector: isConnector, kind }, geometry: { type: "LineString", coordinates: [graph.coord(a)] } };
+      segments.push(seg);
+    }
+    seg.geometry.coordinates.push(graph.coord(b));
+  }
+  const levelsUsed = [...new Set(path.nodeIds.map((k) => graph.levelOf(k)).filter((l) => !l.includes(";")))];
 
   // Dotted connectors from the actual place to where it meets the network.
   const connectors = [];
@@ -97,6 +151,18 @@ export function computeRoute(graph, from, to, profileId, ctx = {}) {
 
   if (s.snapDistance > 60) warnings.push(`"${from.name ?? "Start"}" is ${Math.round(s.snapDistance)} m from the nearest mapped path.`);
   if (t.snapDistance > 60) warnings.push(`"${to.name ?? "Destination"}" is ${Math.round(t.snapDistance)} m from the nearest mapped path.`);
+
+  const directions = buildDirections(graph, path.nodeIds, path.wayIds, { from: from.name, to: to.name, startLevel: s.level });
+  const levelChanges = directions.filter((d) => d.level != null && d.levelAfter != null && d.level !== d.levelAfter).length;
+
+  // Where the endpoints actually joined the network (debug overlay for mappers).
+  const snapPoints = {
+    type: "FeatureCollection",
+    features: [
+      { type: "Feature", properties: { end: "from", via: s.via, level: s.level }, geometry: { type: "Point", coordinates: coords[0] } },
+      { type: "Feature", properties: { end: "to", via: t.via, level: t.level }, geometry: { type: "Point", coordinates: coords[coords.length - 1] } },
+    ],
+  };
 
   return {
     profile: profile.id,
@@ -113,9 +179,13 @@ export function computeRoute(graph, from, to, profileId, ctx = {}) {
     surfaces: summary.surfaces,
     roadM: summary.roadM,
     footM: summary.footM,
+    levels: levelsUsed,
+    levelChanges,
     line,
+    segments: { type: "FeatureCollection", features: segments },
     connectors: { type: "FeatureCollection", features: connectors },
-    directions: buildDirections(graph, path.nodeIds, path.wayIds, { from: from.name, to: to.name }),
+    snapPoints,
+    directions,
     warnings,
   };
 }

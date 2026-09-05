@@ -2,12 +2,17 @@
  * In-memory routing graph built from public/data/graph.json.
  *
  * graph.json shape (produced by scripts/build-data.mjs):
- *   nodes:    { [nodeId]: [lon, lat] }
- *   nodeTags: { [nodeId]: { ...tags } }      only nodes with routing-relevant tags
- *   ways:     { [wayId]: { ...tags } }
- *   edges:    [ [fromId, toId, lengthM, wayId], ... ]   undirected
+ *   nodes:    { [key]: [lon, lat, levelLabel] }   key = "<osmNodeId>@<level>"
+ *   nodeTags: { [osmNodeId]: { ...tags } }        only nodes with routing-relevant tags
+ *   ways:     { [wayId]: { ...tags } }            incl. synthetic "elev<nodeId>" lift ways
+ *   edges:    [ [fromKey, toKey, lengthM, wayId], ... ]   undirected
+ *
+ * Levels: a node key's level is "0", "1", … for a floor, or "c<wayId>" while
+ * on a connector (stairs / ramp). Two floors are joined only through connector
+ * or lift edges, never directly.
  */
 import { haversineMeters } from "../geo/haversine.js";
+import { splitKey } from "../levels.js";
 
 export class Graph {
   constructor(json) {
@@ -18,11 +23,18 @@ export class Graph {
     this.adjacency = new Map();
     this.edgeCount = 0;
     for (const [a, b, length, wayId] of json.edges) {
-      this.#link(String(a), String(b), length, String(wayId));
-      this.#link(String(b), String(a), length, String(wayId));
+      this.#link(a, b, length, wayId);
+      this.#link(b, a, length, wayId);
       this.edgeCount += 1;
     }
     this.nodeIds = Object.keys(this.nodes);
+    /** Floors present ("0","1",…), sorted. */
+    const levels = new Set();
+    for (const k of this.nodeIds) {
+      const l = this.nodes[k][2];
+      if (l && !l.includes(";")) levels.add(l);
+    }
+    this.levels = [...levels].sort((x, y) => Number(x) - Number(y));
   }
 
   #link(from, to, length, wayId) {
@@ -34,50 +46,63 @@ export class Graph {
     list.push({ to, length, wayId });
   }
 
-  has(nodeId) {
-    return nodeId in this.nodes;
+  has(key) {
+    return key in this.nodes;
   }
 
-  /** [lon, lat] of a node. */
-  coord(nodeId) {
-    return this.nodes[nodeId];
+  /** [lon, lat] of a node key. */
+  coord(key) {
+    const n = this.nodes[key];
+    return n ? [n[0], n[1]] : undefined;
   }
 
-  neighbours(nodeId) {
-    return this.adjacency.get(nodeId) ?? [];
+  /** Floor label of a node: "0", "1", or "0;1" while on stairs/ramp. */
+  levelOf(key) {
+    return this.nodes[key]?.[2] ?? "0";
+  }
+
+  /** True when the node sits on a connector (stairs/ramp), i.e. between floors. */
+  isConnectorNode(key) {
+    return splitKey(key).level.startsWith("c");
+  }
+
+  neighbours(key) {
+    return this.adjacency.get(key) ?? [];
   }
 
   wayTags(wayId) {
     return this.ways[wayId] ?? {};
   }
 
-  tagsOfNode(nodeId) {
-    return this.nodeTags[nodeId] ?? null;
+  /** OSM node tags (shared by all level-variants of the node). */
+  tagsOfNode(key) {
+    return this.nodeTags[splitKey(key).osmId] ?? null;
   }
 
-  distanceBetween(aId, bId) {
-    const a = this.nodes[aId];
-    const b = this.nodes[bId];
+  distanceBetween(aKey, bKey) {
+    const a = this.nodes[aKey];
+    const b = this.nodes[bKey];
     return haversineMeters(a[1], a[0], b[1], b[0]);
   }
 
   /**
-   * Nearest graph node to a lon/lat. Linear scan: the graph is a few thousand
-   * nodes, so this takes well under a millisecond.
-   * @param {(nodeId: string) => boolean} [filter]
+   * Nearest graph node to a lon/lat, optionally restricted to a floor.
+   * Linear scan over a few thousand nodes: well under a millisecond.
+   * @param {{ level?: string|null, maxMeters?: number, filter?: (key: string) => boolean }} [opts]
    */
-  nearestNode(lon, lat, maxMeters = Infinity, filter) {
+  nearestNode(lon, lat, opts = {}) {
+    const { level = null, maxMeters = Infinity, filter } = opts;
     let best = null;
     let bestD = maxMeters;
-    for (const id of this.nodeIds) {
-      if (filter && !filter(id)) continue;
-      const [nlon, nlat] = this.nodes[id];
-      // Cheap pre-filter on a degree box before the trig call.
-      if (Math.abs(nlat - lat) > 0.01 || Math.abs(nlon - lon) > 0.01) continue;
-      const d = haversineMeters(lat, lon, nlat, nlon);
+    for (const key of this.nodeIds) {
+      const n = this.nodes[key];
+      if (Math.abs(n[1] - lat) > 0.01 || Math.abs(n[0] - lon) > 0.01) continue;
+      if (level != null && n[2] !== level) continue;
+      if (filter && !filter(key)) continue;
+      const d = haversineMeters(lat, lon, n[1], n[0]);
       if (d < bestD) {
         bestD = d;
-        best = id;
+        best = key;
       }
     }
     return best ? { nodeId: best, distance: bestD } : null;

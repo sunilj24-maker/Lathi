@@ -12,7 +12,9 @@ import {
 } from "../../data/config.js";
 import { bboxToBounds, coordsBbox, padBbox } from "../lib/geo/bbox.js";
 import { buildingPlace, pointPlace } from "../lib/data.js";
+import { GROUND, levelLabel } from "../lib/levels.js";
 import FeaturePopup from "./FeaturePopup.jsx";
+import QaPopup from "./QaPopup.jsx";
 
 const EMPTY = { type: "FeatureCollection", features: [] };
 const WORLD = [
@@ -30,6 +32,11 @@ function kindColorExpr() {
   return ["match", ["get", "kind"], ...pairs, "#64748b"];
 }
 
+/** Filter: feature has no level, spans levels, or is on the selected floor. */
+function onFloorFilter(level) {
+  return ["any", ["!", ["has", "level"]], ["==", ["get", "level"], null], ["==", ["to-string", ["get", "level"]], level], ["in", ";", ["to-string", ["get", "level"]]]];
+}
+
 function markerElement(kind) {
   const el = document.createElement("div");
   el.className = `pin pin-${kind}`;
@@ -39,22 +46,28 @@ function markerElement(kind) {
 
 /**
  * The campus map: basemap locked to IITK, Academic Area overlay, buildings,
- * accessibility features, route rendering, from/to pins, and popups.
+ * indoor floors, accessibility features, route rendering, pins and popups.
  */
 export default function MapView({
   academicArea,
   buildings,
+  indoor,
   features,
   places,
+  qa,
   from,
   to,
   result,
   hoveredStep,
   focus,
+  level = GROUND,
   onSetFrom,
   onSetTo,
   showFeatures = true,
   showBuildings = true,
+  showIndoor = true,
+  showQa = false,
+  showSnap = false,
 }) {
   const containerRef = useRef(null);
   const mapRef = useRef(null);
@@ -62,10 +75,10 @@ export default function MapView({
   const popupRootRef = useRef(null);
   const fromMarker = useRef(null);
   const toMarker = useRef(null);
-  const callbacks = useRef({ onSetFrom, onSetTo, places });
+  const callbacks = useRef({ onSetFrom, onSetTo, places, level });
   const [loaded, setLoaded] = useState(false);
 
-  callbacks.current = { onSetFrom, onSetTo, places };
+  callbacks.current = { onSetFrom, onSetTo, places, level };
 
   // ---- create the map once ---------------------------------------------------
   useEffect(() => {
@@ -81,39 +94,20 @@ export default function MapView({
     });
     mapRef.current = map;
     map.addControl(new maplibregl.NavigationControl({ visualizePitch: false }), "top-right");
-    map.addControl(
-      new maplibregl.GeolocateControl({ positionOptions: { enableHighAccuracy: true }, trackUserLocation: true }),
-      "top-right",
-    );
+    map.addControl(new maplibregl.GeolocateControl({ positionOptions: { enableHighAccuracy: true }, trackUserLocation: true }), "top-right");
     map.addControl(new maplibregl.ScaleControl({ maxWidth: 120, unit: "metric" }), "bottom-right");
 
     map.on("load", () => {
-      // Sources
-      map.addSource("mask", { type: "geojson", data: EMPTY });
-      map.addSource("academic-area", { type: "geojson", data: EMPTY });
-      map.addSource("buildings", { type: "geojson", data: EMPTY });
-      map.addSource("features", { type: "geojson", data: EMPTY });
-      map.addSource("route-compare", { type: "geojson", data: EMPTY });
-      map.addSource("route", { type: "geojson", data: EMPTY });
-      map.addSource("connectors", { type: "geojson", data: EMPTY });
-      map.addSource("step", { type: "geojson", data: EMPTY });
+      for (const id of ["mask", "academic-area", "buildings", "indoor", "features", "route-compare", "route", "connectors", "snap", "step", "qa"]) {
+        map.addSource(id, { type: "geojson", data: EMPTY });
+      }
 
-      // Dim everything outside the Academic Area ("coverage limited").
+      // Dim everything outside the Academic Area.
       map.addLayer({ id: "mask-fill", type: "fill", source: "mask", paint: { "fill-color": "#0f172a", "fill-opacity": 0.08 } });
-      map.addLayer({
-        id: "academic-fill",
-        type: "fill",
-        source: "academic-area",
-        paint: { "fill-color": "#2563eb", "fill-opacity": 0.04 },
-      });
-      map.addLayer({
-        id: "academic-outline",
-        type: "line",
-        source: "academic-area",
-        paint: { "line-color": "#2563eb", "line-width": 2, "line-dasharray": [3, 2], "line-opacity": 0.8 },
-      });
+      map.addLayer({ id: "academic-fill", type: "fill", source: "academic-area", paint: { "fill-color": "#2563eb", "fill-opacity": 0.04 } });
+      map.addLayer({ id: "academic-outline", type: "line", source: "academic-area", paint: { "line-color": "#2563eb", "line-width": 2, "line-dasharray": [3, 2], "line-opacity": 0.8 } });
 
-      // Buildings: named ones get a highlight + label; others a faint outline.
+      // Buildings
       map.addLayer({
         id: "buildings-fill",
         type: "fill",
@@ -123,12 +117,50 @@ export default function MapView({
           "fill-opacity": ["case", ["has", "name"], 0.35, 0.12],
         },
       });
+      map.addLayer({ id: "buildings-outline", type: "line", source: "buildings", paint: { "line-color": "#475569", "line-width": ["case", ["has", "name"], 1, 0.4], "line-opacity": 0.6 } });
+
+      // Indoor: rooms + corridors of the selected floor.
       map.addLayer({
-        id: "buildings-outline",
-        type: "line",
-        source: "buildings",
-        paint: { "line-color": "#475569", "line-width": ["case", ["has", "name"], 1, 0.4], "line-opacity": 0.6 },
+        id: "indoor-room-fill",
+        type: "fill",
+        source: "indoor",
+        minzoom: 16,
+        filter: ["all", ["==", ["get", "kind"], "room"], onFloorFilter(GROUND)],
+        paint: { "fill-color": "#fef3c7", "fill-opacity": 0.75 },
       });
+      map.addLayer({
+        id: "indoor-room-outline",
+        type: "line",
+        source: "indoor",
+        minzoom: 16,
+        filter: ["all", ["==", ["get", "kind"], "room"], onFloorFilter(GROUND)],
+        paint: { "line-color": "#b45309", "line-width": 0.8, "line-opacity": 0.8 },
+      });
+      map.addLayer({
+        id: "indoor-corridor",
+        type: "line",
+        source: "indoor",
+        minzoom: 15.5,
+        filter: ["all", ["==", ["geometry-type"], "LineString"], ["!=", ["get", "kind"], "stairs"], onFloorFilter(GROUND)],
+        paint: { "line-color": "#f59e0b", "line-width": ["interpolate", ["linear"], ["zoom"], 16, 2, 19, 6], "line-opacity": 0.55 },
+        layout: { "line-cap": "round", "line-join": "round" },
+      });
+      map.addLayer({
+        id: "indoor-room-label",
+        type: "symbol",
+        source: "indoor",
+        minzoom: 17,
+        filter: ["all", ["==", ["get", "kind"], "room"], onFloorFilter(GROUND)],
+        layout: {
+          "text-field": ["coalesce", ["get", "name"], ["get", "ref"]],
+          "text-font": ["Noto Sans Regular"],
+          "text-size": 11,
+          "text-max-width": 7,
+          "text-optional": true,
+        },
+        paint: { "text-color": "#78350f", "text-halo-color": "#ffffff", "text-halo-width": 1.2 },
+      });
+
       map.addLayer({
         id: "buildings-label",
         type: "symbol",
@@ -151,16 +183,12 @@ export default function MapView({
         id: "features-line",
         type: "line",
         source: "features",
-        filter: ["==", ["geometry-type"], "LineString"],
-        paint: {
-          "line-color": kindColorExpr(),
-          "line-width": ["interpolate", ["linear"], ["zoom"], 15, 3, 18, 7],
-          "line-opacity": 0.9,
-        },
+        filter: ["all", ["==", ["geometry-type"], "LineString"], onFloorFilter(GROUND)],
+        paint: { "line-color": kindColorExpr(), "line-width": ["interpolate", ["linear"], ["zoom"], 15, 3, 18, 7], "line-opacity": 0.9 },
         layout: { "line-cap": "round", "line-join": "round" },
       });
 
-      // Comparison (shortest) route in grey when the wheelchair route differs.
+      // Comparison route (shortest) when the wheelchair route differs.
       map.addLayer({
         id: "route-compare-line",
         type: "line",
@@ -168,11 +196,20 @@ export default function MapView({
         paint: { "line-color": "#64748b", "line-width": 4, "line-dasharray": [2, 2], "line-opacity": 0.7 },
         layout: { "line-cap": "round", "line-join": "round" },
       });
-      // Main route: white casing + blue line, like Google Maps.
+      // Main route: segments on other floors faded + dashed; current floor + connectors solid.
+      map.addLayer({
+        id: "route-other-floor",
+        type: "line",
+        source: "route",
+        filter: ["all", ["!", ["get", "connector"]], ["!=", ["to-string", ["get", "level"]], GROUND]],
+        paint: { "line-color": ["match", ["get", "profile"], "wheelchair", "#0e7490", "#1a73e8"], "line-width": 4, "line-dasharray": [1, 1.5], "line-opacity": 0.45 },
+        layout: { "line-cap": "round", "line-join": "round" },
+      });
       map.addLayer({
         id: "route-casing",
         type: "line",
         source: "route",
+        filter: ["any", ["get", "connector"], ["==", ["to-string", ["get", "level"]], GROUND]],
         paint: { "line-color": "#ffffff", "line-width": ["interpolate", ["linear"], ["zoom"], 14, 6, 18, 12] },
         layout: { "line-cap": "round", "line-join": "round" },
       });
@@ -180,8 +217,9 @@ export default function MapView({
         id: "route-line",
         type: "line",
         source: "route",
+        filter: ["any", ["get", "connector"], ["==", ["to-string", ["get", "level"]], GROUND]],
         paint: {
-          "line-color": ["match", ["get", "profile"], "wheelchair", "#0e7490", "#1a73e8"],
+          "line-color": ["case", ["get", "connector"], ["match", ["get", "kind"], "stairs", "#dc2626", "ramp", "#16a34a", "elevator", "#0891b2", "#1a73e8"], ["match", ["get", "profile"], "wheelchair", "#0e7490", "#1a73e8"]],
           "line-width": ["interpolate", ["linear"], ["zoom"], 14, 4, 18, 8],
         },
         layout: { "line-cap": "round", "line-join": "round" },
@@ -199,7 +237,7 @@ export default function MapView({
         id: "features-point",
         type: "circle",
         source: "features",
-        filter: ["==", ["geometry-type"], "Point"],
+        filter: ["all", ["==", ["geometry-type"], "Point"], onFloorFilter(GROUND)],
         paint: {
           "circle-radius": ["interpolate", ["linear"], ["zoom"], 14, 3, 17, 6, 19, 9],
           "circle-color": kindColorExpr(),
@@ -209,21 +247,38 @@ export default function MapView({
         },
       });
 
-      // Highlighted direction step.
+      // Where the endpoints joined the network (debug).
       map.addLayer({
-        id: "step-point",
+        id: "snap-point",
         type: "circle",
-        source: "step",
-        paint: { "circle-radius": 10, "circle-color": "#1a73e8", "circle-opacity": 0.25, "circle-stroke-color": "#1a73e8", "circle-stroke-width": 2 },
+        source: "snap",
+        layout: { visibility: "none" },
+        paint: { "circle-radius": 7, "circle-color": "#ffffff", "circle-opacity": 0.9, "circle-stroke-color": ["match", ["get", "end"], "from", "#188038", "#d93025"], "circle-stroke-width": 3 },
       });
 
-      // Cursor + clicks
-      for (const id of ["features-point", "features-line", "buildings-fill"]) {
+      // Data-quality issues.
+      map.addLayer({
+        id: "qa-point",
+        type: "circle",
+        source: "qa",
+        layout: { visibility: "none" },
+        paint: {
+          "circle-radius": ["interpolate", ["linear"], ["zoom"], 14, 4, 18, 9],
+          "circle-color": ["match", ["get", "severity"], "high", "#d93025", "medium", "#f59e0b", "#94a3b8"],
+          "circle-opacity": 0.85,
+          "circle-stroke-color": "#ffffff",
+          "circle-stroke-width": 1.5,
+        },
+      });
+
+      // Highlighted direction step.
+      map.addLayer({ id: "step-point", type: "circle", source: "step", paint: { "circle-radius": 10, "circle-color": "#1a73e8", "circle-opacity": 0.25, "circle-stroke-color": "#1a73e8", "circle-stroke-width": 2 } });
+
+      for (const id of ["features-point", "features-line", "buildings-fill", "indoor-room-fill", "qa-point"]) {
         map.on("mouseenter", id, () => (map.getCanvas().style.cursor = "pointer"));
         map.on("mouseleave", id, () => (map.getCanvas().style.cursor = ""));
       }
       map.on("click", (e) => handleClick(map, e));
-
       setLoaded(true);
     });
 
@@ -254,10 +309,7 @@ export default function MapView({
     const root = createRoot(el);
     root.render(node);
     popupRootRef.current = root;
-    popupRef.current = new maplibregl.Popup({ closeButton: true, maxWidth: "320px", offset: 8 })
-      .setLngLat(lngLat)
-      .setDOMContent(el)
-      .addTo(map);
+    popupRef.current = new maplibregl.Popup({ closeButton: true, maxWidth: "340px", offset: 8 }).setLngLat(lngLat).setDOMContent(el).addTo(map);
     popupRef.current.on("close", () => {
       if (popupRootRef.current === root) {
         popupRootRef.current = null;
@@ -268,18 +320,26 @@ export default function MapView({
   }
 
   function handleClick(map, e) {
-    const { onSetFrom, onSetTo, places } = callbacks.current;
-    const hits = map.queryRenderedFeatures(e.point, { layers: ["features-point", "features-line", "buildings-fill"] });
-    const feat = hits.find((h) => h.layer.id.startsWith("features")) ?? hits[0];
+    const { onSetFrom, onSetTo, places, level } = callbacks.current;
+    const layers = ["qa-point", "features-point", "features-line", "indoor-room-fill", "buildings-fill"].filter((id) => map.getLayer(id) && map.getLayoutProperty(id, "visibility") !== "none");
+    const hits = map.queryRenderedFeatures(e.point, { layers });
+    const feat = hits.find((h) => h.layer.id === "qa-point") ?? hits.find((h) => h.layer.id.startsWith("features")) ?? hits.find((h) => h.layer.id === "indoor-room-fill") ?? hits[0];
+
+    if (feat?.layer.id === "qa-point") {
+      openPopup(map, feat.geometry.coordinates, <QaPopup issue={feat.properties} />);
+      return;
+    }
 
     if (feat) {
       const geo = { type: "Feature", properties: feat.properties, geometry: feat.geometry };
       let place;
       if (feat.layer.id === "buildings-fill") {
         place = buildingPlace(geo, places);
+      } else if (feat.layer.id === "indoor-room-fill") {
+        place = places?.find((p) => p.id === feat.properties.osmId) ?? pointPlace(e.lngLat.lng, e.lngLat.lat, feat.properties.name || "Room", feat.properties.level);
       } else {
         const c = feat.geometry.type === "Point" ? feat.geometry.coordinates : [e.lngLat.lng, e.lngLat.lat];
-        place = pointPlace(c[0], c[1], feat.properties.name || FEATURE_KINDS[feat.properties.kind]?.label || "Feature");
+        place = pointPlace(c[0], c[1], feat.properties.name || FEATURE_KINDS[feat.properties.kind]?.label || "Feature", feat.properties.level);
       }
       const anchor = feat.geometry.type === "Point" ? feat.geometry.coordinates : [e.lngLat.lng, e.lngLat.lat];
       openPopup(
@@ -300,8 +360,8 @@ export default function MapView({
       return;
     }
 
-    // Plain map click: a dropped pin with From/To actions.
-    const place = pointPlace(e.lngLat.lng, e.lngLat.lat);
+    // Plain map click: a dropped pin on the floor being viewed.
+    const place = pointPlace(e.lngLat.lng, e.lngLat.lat, undefined, level);
     openPopup(
       map,
       e.lngLat,
@@ -309,26 +369,13 @@ export default function MapView({
         <div className="popup-title">Dropped pin</div>
         <div className="popup-sub">
           {e.lngLat.lat.toFixed(5)}, {e.lngLat.lng.toFixed(5)}
+          {level !== GROUND ? ` · ${levelLabel(level)}` : ""}
         </div>
         <div className="popup-actions">
-          <button
-            type="button"
-            className="btn btn-from"
-            onClick={() => {
-              onSetFrom(place);
-              closePopup();
-            }}
-          >
+          <button type="button" className="btn btn-from" onClick={() => { onSetFrom(place); closePopup(); }}>
             Directions from here
           </button>
-          <button
-            type="button"
-            className="btn btn-to"
-            onClick={() => {
-              onSetTo(place);
-              closePopup();
-            }}
-          >
+          <button type="button" className="btn btn-to" onClick={() => { onSetTo(place); closePopup(); }}>
             Directions to here
           </button>
         </div>
@@ -342,27 +389,34 @@ export default function MapView({
     if (!loaded || !map || !academicArea) return;
     map.getSource("academic-area").setData(academicArea);
     const ring = academicArea.features?.[0]?.geometry?.coordinates?.[0];
-    if (ring) {
-      map.getSource("mask").setData({
-        type: "Feature",
-        properties: {},
-        geometry: { type: "Polygon", coordinates: [WORLD, ring] },
-      });
-    }
+    if (ring) map.getSource("mask").setData({ type: "Feature", properties: {}, geometry: { type: "Polygon", coordinates: [WORLD, ring] } });
   }, [loaded, academicArea]);
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!loaded || !map || !buildings) return;
-    map.getSource("buildings").setData(buildings);
+    if (loaded && map && buildings) map.getSource("buildings").setData(buildings);
   }, [loaded, buildings]);
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!loaded || !map || !features) return;
-    map.getSource("features").setData(features);
+    if (loaded && map && indoor) map.getSource("indoor").setData(indoor);
+  }, [loaded, indoor]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (loaded && map && features) map.getSource("features").setData(features);
   }, [loaded, features]);
 
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!loaded || !map) return;
+    const fc = qa?.issues
+      ? { type: "FeatureCollection", features: qa.issues.map((i, idx) => ({ type: "Feature", id: idx, properties: { ...i, idx }, geometry: { type: "Point", coordinates: [i.lon, i.lat] } })) }
+      : EMPTY;
+    map.getSource("qa").setData(fc);
+  }, [loaded, qa]);
+
+  // ---- layer visibility ---------------------------------------------------------------
   useEffect(() => {
     const map = mapRef.current;
     if (!loaded || !map) return;
@@ -372,7 +426,27 @@ export default function MapView({
     vis("buildings-fill", showBuildings);
     vis("buildings-outline", showBuildings);
     vis("buildings-label", showBuildings);
-  }, [loaded, showFeatures, showBuildings]);
+    for (const id of ["indoor-room-fill", "indoor-room-outline", "indoor-corridor", "indoor-room-label"]) vis(id, showIndoor);
+    vis("qa-point", showQa);
+    vis("snap-point", showSnap);
+  }, [loaded, showFeatures, showBuildings, showIndoor, showQa, showSnap]);
+
+  // ---- floor switch: re-filter indoor, features and route segments ----------------------
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!loaded || !map) return;
+    const floor = onFloorFilter(level);
+    map.setFilter("indoor-room-fill", ["all", ["==", ["get", "kind"], "room"], floor]);
+    map.setFilter("indoor-room-outline", ["all", ["==", ["get", "kind"], "room"], floor]);
+    map.setFilter("indoor-room-label", ["all", ["==", ["get", "kind"], "room"], floor]);
+    map.setFilter("indoor-corridor", ["all", ["==", ["geometry-type"], "LineString"], ["!=", ["get", "kind"], "stairs"], floor]);
+    map.setFilter("features-line", ["all", ["==", ["geometry-type"], "LineString"], floor]);
+    map.setFilter("features-point", ["all", ["==", ["geometry-type"], "Point"], floor]);
+    const onFloor = ["any", ["get", "connector"], ["==", ["to-string", ["get", "level"]], level]];
+    map.setFilter("route-casing", onFloor);
+    map.setFilter("route-line", onFloor);
+    map.setFilter("route-other-floor", ["all", ["!", ["get", "connector"]], ["!=", ["to-string", ["get", "level"]], level]]);
+  }, [loaded, level]);
 
   // ---- from / to pins -----------------------------------------------------------------
   useEffect(() => {
@@ -384,16 +458,11 @@ export default function MapView({
         ref.current = null;
         return;
       }
-      if (!ref.current) {
-        ref.current = new maplibregl.Marker({ element: markerElement(kind), anchor: "bottom" }).setLngLat([place.lon, place.lat]).addTo(map);
-      } else {
-        ref.current.setLngLat([place.lon, place.lat]);
-      }
+      if (!ref.current) ref.current = new maplibregl.Marker({ element: markerElement(kind), anchor: "bottom" }).setLngLat([place.lon, place.lat]).addTo(map);
+      else ref.current.setLngLat([place.lon, place.lat]);
     };
     sync(fromMarker, from, "from");
     sync(toMarker, to, "to");
-
-    // Only one endpoint chosen so far: gently centre on it.
     if ((from && !to) || (!from && to)) {
       const p = from ?? to;
       map.easeTo({ center: [p.lon, p.lat], zoom: Math.max(map.getZoom(), 16.5), duration: 500 });
@@ -406,14 +475,13 @@ export default function MapView({
     if (!loaded || !map) return;
     closePopup();
     if (!result) {
-      map.getSource("route").setData(EMPTY);
-      map.getSource("route-compare").setData(EMPTY);
-      map.getSource("connectors").setData(EMPTY);
+      for (const id of ["route", "route-compare", "connectors", "snap"]) map.getSource(id).setData(EMPTY);
       return;
     }
     const { main, comparison } = result;
-    map.getSource("route").setData(main.line);
+    map.getSource("route").setData(main.segments ?? main.line);
     map.getSource("connectors").setData(main.connectors);
+    map.getSource("snap").setData(main.snapPoints ?? EMPTY);
     map.getSource("route-compare").setData(comparison && !comparison.sameAsMain ? comparison.line : EMPTY);
 
     const coords = [...main.line.geometry.coordinates, [main.from.lon, main.from.lat], [main.to.lon, main.to.lat]];
@@ -421,7 +489,7 @@ export default function MapView({
     const desktop = window.matchMedia("(min-width: 900px)").matches;
     map.fitBounds(bboxToBounds(b), {
       padding: desktop ? { top: 60, bottom: 60, left: 440, right: 60 } : { top: 80, bottom: 320, left: 40, right: 40 },
-      maxZoom: 18,
+      maxZoom: 18.5,
       duration: 700,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -431,16 +499,15 @@ export default function MapView({
   useEffect(() => {
     const map = mapRef.current;
     if (!loaded || !map) return;
-    map.getSource("step").setData(
-      hoveredStep?.coord ? { type: "Feature", properties: {}, geometry: { type: "Point", coordinates: hoveredStep.coord } } : EMPTY,
-    );
+    map.getSource("step").setData(hoveredStep?.coord ? { type: "Feature", properties: {}, geometry: { type: "Point", coordinates: hoveredStep.coord } } : EMPTY);
   }, [loaded, hoveredStep]);
 
-  // ---- focus request from the panel (clicking a step) -----------------------------------
+  // ---- focus request from the panel -----------------------------------------------------
   useEffect(() => {
     const map = mapRef.current;
     if (!loaded || !map || !focus?.coord) return;
-    map.easeTo({ center: focus.coord, zoom: Math.max(map.getZoom(), 18), duration: 600 });
+    map.easeTo({ center: focus.coord, zoom: Math.max(map.getZoom(), focus.zoom ?? 18), duration: 600 });
+    if (focus.issue) openPopup(map, focus.coord, <QaPopup issue={focus.issue} />);
   }, [loaded, focus]);
 
   return <div ref={containerRef} className="map" role="application" aria-label="Map of IIT Kanpur" />;

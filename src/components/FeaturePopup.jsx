@@ -1,5 +1,6 @@
 import { FEATURE_KINDS } from "../../data/config.js";
 import { POPUP_TAG_ORDER, prettyValue } from "../lib/features.js";
+import { levelLabel } from "../lib/levels.js";
 
 function parseTags(props) {
   if (!props?.tags) return {};
@@ -20,10 +21,14 @@ export default function FeaturePopup({ feature, onFrom, onTo }) {
   const tags = parseTags(props);
   const kind = props.kind ? FEATURE_KINDS[props.kind] : null;
 
-  const title = props.name || (isBuilding ? "Unnamed building" : kind?.label || "Feature");
+  const isRoom = props.kind === "room";
+  const title = props.name || props.ref || (isBuilding ? "Unnamed building" : isRoom ? "Room" : kind?.label || "Feature");
+  const levelText = props.level != null && props.level !== "" ? levelLabel(props.level) : null;
   const subtitle = isBuilding
     ? `Building${props.levels ? ` · ${props.levels} floors` : ""}${props.entrances ? ` · ${props.entrances} mapped entrance${props.entrances > 1 ? "s" : ""}` : ""}`
-    : kind?.label;
+    : isRoom
+      ? `Room${levelText ? ` · ${levelText}` : ""}`
+      : [kind?.label, levelText].filter(Boolean).join(" · ");
 
   const rows = POPUP_TAG_ORDER.filter((k) => tags[k] != null).map((k) => [k, tags[k]]);
   const wheelchair = props.wheelchair ?? tags.wheelchair ?? null;
@@ -55,7 +60,7 @@ export default function FeaturePopup({ feature, onFrom, onTo }) {
         </dl>
       )}
 
-      {!isBuilding && rows.length === 0 && (
+      {!isBuilding && !isRoom && rows.length === 0 && (
         <div className="popup-note">No accessibility details in OpenStreetMap yet. Survey and tag it in JOSM.</div>
       )}
       {props.notes && <div className="popup-note">{props.notes}</div>}

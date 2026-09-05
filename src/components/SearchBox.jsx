@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Fuse from "fuse.js";
+import { levelLabel } from "../lib/levels.js";
 
-const KIND_ICON = { building: "🏛", entrance: "🚪", landmark: "📍", point: "📌" };
+const KIND_ICON = { building: "🏛", entrance: "🚪", landmark: "📍", point: "📌", room: "🔲" };
 
 /**
  * From / To search input with fuzzy results over places.json.
@@ -24,7 +25,8 @@ export default function SearchBox({ places, value, onChange, placeholder, marker
       new Fuse(places ?? [], {
         keys: [
           { name: "name", weight: 0.8 },
-          { name: "category", weight: 0.2 },
+          { name: "building", weight: 0.15 },
+          { name: "category", weight: 0.05 },
         ],
         threshold: 0.38,
         ignoreLocation: true,
@@ -140,7 +142,8 @@ export default function SearchBox({ places, value, onChange, placeholder, marker
               <span className="result-text">
                 <span className="result-name">{p.name}</span>
                 <span className="result-sub">
-                  {p.kind === "entrance" ? "Entrance" : p.kind === "landmark" ? prettify(p.category) : "Building"}
+                  {p.kind === "entrance" ? "Entrance" : p.kind === "room" ? `Room · ${levelLabel(p.level)}` : p.kind === "landmark" ? prettify(p.category) : "Building"}
+                  {p.kind === "entrance" && p.level != null && p.level !== "0" ? ` · ${levelLabel(p.level)}` : ""}
                   {p.inAcademicArea ? " · Academic Area" : ""}
                 </span>
               </span>

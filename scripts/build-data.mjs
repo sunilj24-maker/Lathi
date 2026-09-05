@@ -4,12 +4,26 @@
  *   npm run data:build                       # from data/raw/iitk.osm.json
  *   node scripts/build-data.mjs --file x.osm # from a JOSM .osm file (unuploaded edits)
  *
- * Outputs (all under public/data so the browser can fetch them):
- *   graph.json       pedestrian routing graph (nodes, edges, way tags)
- *   buildings.geojson named building footprints
- *   features.geojson accessibility features (ramps, stairs, crossings, entrances, …)
- *   places.json      searchable buildings / entrances / landmarks
- *   meta.json        counts + snapshot timestamp shown in the UI
+ * Outputs (public/data/):
+ *   graph.json        level-aware pedestrian routing graph
+ *   buildings.geojson building footprints (ways + multipolygon relations)
+ *   indoor.geojson    corridors, rooms, doors with their level (floor switcher)
+ *   features.geojson  accessibility features (ramps, stairs, lifts, crossings, entrances, …)
+ *   places.json       searchable buildings / entrances / rooms / landmarks
+ *   qa.json           data-quality issues for the mappers (islands, unconnected entrances, …)
+ *   meta.json         counts + snapshot timestamp shown in the UI
+ *
+ * Level model
+ * -----------
+ * Every graph node is "<osmNodeId>@<level>". A way tagged level=L (or untagged
+ * = outdoors = 0) connects its nodes at level L only. A way spanning several
+ * levels (level=0;1: stairs, ramps, lifts drawn as ways) is a *connector*: its
+ * own nodes live at "<id>@c<wayId>" and are joined by zero-length transfer
+ * edges to every level present at those nodes. Lift nodes (highway=elevator,
+ * level=0;1;2) join the levels present at that node directly. Nothing else
+ * ever joins two levels, so the router cannot step from floor 0 to floor 1
+ * except through a connector, and profile rules (stairs forbidden for
+ * wheelchair, …) apply to the connector edges.
  */
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { join } from "node:path";
@@ -18,11 +32,13 @@ import { haversineMeters } from "../src/lib/geo/haversine.js";
 import { pointInGeometry, ringCentroid } from "../src/lib/geo/pointInPolygon.js";
 import { bboxContains } from "../src/lib/geo/bbox.js";
 import { classifyFeature } from "../src/lib/features.js";
+import { GROUND, isMultiLevel, nodeKey, parseLevels } from "../src/lib/levels.js";
 import { parseOsmXml } from "./osm-xml.mjs";
 
 const ROOT = process.cwd();
 const OUT_DIR = join(ROOT, "public/data");
 const ROUTABLE = new Set(ROUTABLE_HIGHWAYS);
+const ELEVATOR_METERS_PER_LEVEL = 4;
 
 // ---------------------------------------------------------------- input
 
@@ -57,19 +73,14 @@ function loadAcademicArea() {
 
 const round = (n) => Math.round(n * 1e6) / 1e6;
 
-/** Pedestrians may use this way? */
 function footAllowed(tags) {
   if (tags.foot === "no" || tags.foot === "private") return false;
-  if (["no", "private"].includes(tags.access) && !["yes", "designated", "permissive"].includes(tags.foot)) {
-    return false;
-  }
+  if (["no", "private"].includes(tags.access) && !["yes", "designated", "permissive"].includes(tags.foot)) return false;
   if (tags.highway === "construction" || tags.construction) return false;
   return true;
 }
 
-function isRoutableWay(tags) {
-  return Boolean(tags.highway) && ROUTABLE.has(tags.highway) && footAllowed(tags);
-}
+const isRoutableWay = (tags) => Boolean(tags.highway) && ROUTABLE.has(tags.highway) && footAllowed(tags);
 
 /** Tags on a node that matter for routing or display. */
 function relevantNodeTags(tags) {
@@ -77,7 +88,9 @@ function relevantNodeTags(tags) {
   const keep = {};
   for (const k of Object.keys(tags)) {
     if (
-      /^(highway|crossing|kerb|tactile_paving|barrier|entrance|wheelchair|door|width|level|access|foot|check_date|name|ramp|automatic_door|step_count|handrail|bicycle|motor_vehicle|locked)$|^crossing:|^ramp:|^kerb:/.test(k)
+      /^(highway|crossing|kerb|tactile_paving|barrier|entrance|wheelchair|door|width|level|access|foot|check_date|name|ramp|automatic_door|step_count|handrail|bicycle|motor_vehicle|locked|indoor|capacity)$|^crossing:|^ramp:|^kerb:/.test(
+        k,
+      )
     ) {
       keep[k] = tags[k];
     }
@@ -89,13 +102,38 @@ function wayCoords(way, nodes) {
   const coords = [];
   for (const id of way.nodes) {
     const n = nodes.get(id);
-    if (n) coords.push([n.lon, n.lat]);
+    if (n) coords.push([round(n.lon), round(n.lat)]);
   }
   return coords;
 }
 
-function isClosed(way) {
-  return way.nodes.length > 3 && way.nodes[0] === way.nodes[way.nodes.length - 1];
+const isClosed = (way) => way.nodes.length > 3 && way.nodes[0] === way.nodes[way.nodes.length - 1];
+
+/** Chain the outer member ways of a multipolygon relation into closed rings. */
+function assembleRings(memberWays) {
+  const rings = [];
+  const pending = memberWays.map((w) => [...w.nodes]).filter((n) => n.length > 1);
+  while (pending.length) {
+    let ring = pending.shift();
+    let progress = true;
+    while (ring[0] !== ring[ring.length - 1] && progress) {
+      progress = false;
+      for (let i = 0; i < pending.length; i++) {
+        const seg = pending[i];
+        const last = ring[ring.length - 1];
+        if (seg[0] === last) ring = ring.concat(seg.slice(1));
+        else if (seg[seg.length - 1] === last) ring = ring.concat(seg.slice(0, -1).reverse());
+        else if (seg[0] === ring[0]) ring = seg.slice(1).reverse().concat(ring);
+        else if (seg[seg.length - 1] === ring[0]) ring = seg.slice(0, -1).concat(ring);
+        else continue;
+        pending.splice(i, 1);
+        progress = true;
+        break;
+      }
+    }
+    if (ring[0] === ring[ring.length - 1] && ring.length > 3) rings.push(ring);
+  }
+  return rings;
 }
 
 // ---------------------------------------------------------------- main
@@ -105,99 +143,255 @@ function main() {
   const overrides = loadOverrides();
   const academic = loadAcademicArea();
   const inArea = (lon, lat) => pointInGeometry(lon, lat, academic);
+  const inCampus = (n) => bboxContains(CAMPUS_BBOX, n.lon, n.lat);
 
   const nodes = new Map();
   const ways = [];
+  const waysById = new Map();
   const relations = [];
-  const seenWay = new Set();
   for (const el of raw.elements) {
     if (el.type === "node") {
-      // Older snapshots may contain a node twice (tagged + skeleton); keep the tags.
       const prev = nodes.get(el.id);
       if (!prev || (!prev.tags && el.tags)) nodes.set(el.id, el);
     } else if (el.type === "way") {
-      if (seenWay.has(el.id)) continue;
-      seenWay.add(el.id);
+      if (waysById.has(el.id)) continue;
+      waysById.set(el.id, el);
       ways.push(el);
     } else if (el.type === "relation") relations.push(el);
   }
 
-  // ---- 1. Routing graph -------------------------------------------------
-  const graphNodes = {};
-  const graphWays = {};
+  /** osm node id -> ways passing through it */
+  const parentWays = new Map();
+  for (const way of ways) for (const id of way.nodes) {
+    if (!parentWays.has(id)) parentWays.set(id, []);
+    parentWays.get(id).push(way);
+  }
+
+  // =====================================================================
+  // 1. Level-aware routing graph
+  // =====================================================================
+  const graphNodes = {}; // key -> [lon, lat, levelLabel]
+  const graphWays = {}; // wayId -> tags
   const edges = [];
   const seenEdge = new Set();
-  const degree = new Map();
+  /** osm node id -> Set(level) reached by single-level ways */
+  const levelsAtNode = new Map();
+  const connectorWays = [];
 
+  const addNode = (key, n, level) => {
+    graphNodes[key] ??= [round(n.lon), round(n.lat), level];
+  };
+  const addEdge = (aKey, bKey, len, wayId) => {
+    const k = aKey < bKey ? `${aKey}|${bKey}` : `${bKey}|${aKey}`;
+    if (seenEdge.has(k)) return;
+    seenEdge.add(k);
+    edges.push([aKey, bKey, Math.round(len * 10) / 10, String(wayId)]);
+  };
+
+  /** Level at which an untagged (outdoor) way touches a node: the door's level if it is an entrance. */
+  const outdoorLevelAt = (n) => {
+    const t = n.tags;
+    if (t?.entrance && t.level != null) {
+      const ls = parseLevels(t.level);
+      if (ls.length === 1) return ls[0];
+    }
+    return GROUND;
+  };
+
+  // Pass 1: single-level ways.
   for (const way of ways) {
     const tags = way.tags ?? {};
     if (!isRoutableWay(tags)) continue;
+    if (isMultiLevel(tags)) {
+      connectorWays.push(way);
+      continue;
+    }
+    const tagged = tags.level != null;
+    const wayLevel = tagged ? parseLevels(tags.level)[0] : null;
     let used = false;
     for (let i = 0; i < way.nodes.length - 1; i++) {
       const a = nodes.get(way.nodes[i]);
       const b = nodes.get(way.nodes[i + 1]);
       if (!a || !b) continue;
-      if (!bboxContains(CAMPUS_BBOX, a.lon, a.lat) && !bboxContains(CAMPUS_BBOX, b.lon, b.lat)) continue;
-      const key = a.id < b.id ? `${a.id}|${b.id}` : `${b.id}|${a.id}`;
-      if (seenEdge.has(key)) continue;
-      seenEdge.add(key);
-      graphNodes[a.id] ??= [round(a.lon), round(a.lat)];
-      graphNodes[b.id] ??= [round(b.lon), round(b.lat)];
-      degree.set(a.id, (degree.get(a.id) ?? 0) + 1);
-      degree.set(b.id, (degree.get(b.id) ?? 0) + 1);
-      const len = Math.max(0.5, haversineMeters(a.lat, a.lon, b.lat, b.lon));
-      edges.push([a.id, b.id, Math.round(len * 10) / 10, way.id]);
+      if (!inCampus(a) && !inCampus(b)) continue;
+      const la = tagged ? wayLevel : outdoorLevelAt(a);
+      const lb = tagged ? wayLevel : outdoorLevelAt(b);
+      const ka = nodeKey(a.id, la);
+      const kb = nodeKey(b.id, lb);
+      addNode(ka, a, la);
+      addNode(kb, b, lb);
+      if (!levelsAtNode.has(a.id)) levelsAtNode.set(a.id, new Set());
+      if (!levelsAtNode.has(b.id)) levelsAtNode.set(b.id, new Set());
+      levelsAtNode.get(a.id).add(la);
+      levelsAtNode.get(b.id).add(lb);
+      addEdge(ka, kb, Math.max(0.5, haversineMeters(a.lat, a.lon, b.lat, b.lon)), way.id);
       used = true;
     }
     if (used) graphWays[way.id] = tags;
   }
 
-  // Node tags for graph nodes that carry routing-relevant info (crossings, kerbs, barriers, entrances).
+  // Pass 2: connector ways (stairs / ramps / lifts spanning levels).
+  for (const way of connectorWays) {
+    const tags = way.tags;
+    const cLevel = `c${way.id}`;
+    const label = parseLevels(tags.level).join(";");
+    let used = false;
+    for (let i = 0; i < way.nodes.length - 1; i++) {
+      const a = nodes.get(way.nodes[i]);
+      const b = nodes.get(way.nodes[i + 1]);
+      if (!a || !b) continue;
+      if (!inCampus(a) && !inCampus(b)) continue;
+      const ka = nodeKey(a.id, cLevel);
+      const kb = nodeKey(b.id, cLevel);
+      addNode(ka, a, label);
+      addNode(kb, b, label);
+      addEdge(ka, kb, Math.max(0.5, haversineMeters(a.lat, a.lon, b.lat, b.lon)), way.id);
+      used = true;
+    }
+    if (!used) continue;
+    graphWays[way.id] = tags;
+    // Transfer edges: connector <-> every level present at each of its nodes.
+    for (const id of way.nodes) {
+      const own = nodeKey(id, cLevel);
+      if (!graphNodes[own]) continue;
+      for (const L of levelsAtNode.get(id) ?? []) addEdge(own, nodeKey(id, L), 0, way.id);
+      // Two connectors meeting at a node (stairs landing on a ramp) also join.
+      for (const other of parentWays.get(id) ?? []) {
+        if (other === way || !isRoutableWay(other.tags ?? {}) || !isMultiLevel(other.tags)) continue;
+        const otherKey = nodeKey(id, `c${other.id}`);
+        if (graphNodes[otherKey]) addEdge(own, otherKey, 0, way.id);
+      }
+    }
+  }
+
+  // Pass 3: lift nodes join the levels present at that node.
+  for (const n of nodes.values()) {
+    const t = n.tags;
+    if (t?.highway !== "elevator") continue;
+    const present = [...(levelsAtNode.get(n.id) ?? [])].sort((x, y) => Number(x) - Number(y));
+    if (present.length < 2) continue;
+    const wayId = `elev${n.id}`;
+    graphWays[wayId] = { ...t, highway: "elevator" };
+    for (let i = 0; i < present.length; i++) {
+      for (let j = i + 1; j < present.length; j++) {
+        const diff = Math.abs(Number(present[j]) - Number(present[i])) || 1;
+        addEdge(nodeKey(n.id, present[i]), nodeKey(n.id, present[j]), diff * ELEVATOR_METERS_PER_LEVEL, wayId);
+      }
+    }
+  }
+
   const graphNodeTags = {};
-  for (const idStr of Object.keys(graphNodes)) {
-    const n = nodes.get(Number(idStr));
-    const t = relevantNodeTags(n?.tags);
+  const osmIdsInGraph = new Set(Object.keys(graphNodes).map((k) => k.slice(0, k.indexOf("@"))));
+  for (const idStr of osmIdsInGraph) {
+    const t = relevantNodeTags(nodes.get(Number(idStr))?.tags);
     if (t) graphNodeTags[idStr] = t;
   }
 
-  const graph = {
-    generatedAt: new Date().toISOString(),
-    nodes: graphNodes,
-    nodeTags: graphNodeTags,
-    ways: graphWays,
-    edges,
+  const graph = { generatedAt: new Date().toISOString(), nodes: graphNodes, nodeTags: graphNodeTags, ways: graphWays, edges };
+
+  /** All graph keys for an OSM node id. */
+  const keysOfNode = (id) => {
+    const out = [];
+    for (const L of levelsAtNode.get(id) ?? []) out.push(nodeKey(id, L));
+    for (const w of parentWays.get(id) ?? []) if (graphWays[w.id] && isMultiLevel(w.tags)) out.push(nodeKey(id, `c${w.id}`));
+    return out.filter((k) => graphNodes[k]);
   };
 
-  // ---- 2. Buildings ---------------------------------------------------------
+  // =====================================================================
+  // 2. Buildings (closed ways + multipolygon relations)
+  // =====================================================================
   const buildings = [];
-  const buildingByWayId = new Map();
-  for (const way of ways) {
-    const tags = way.tags ?? {};
-    if (!tags.building || !isClosed(way)) continue;
-    const coords = wayCoords(way, nodes);
-    if (coords.length < 4) continue;
-    const c = ringCentroid(coords);
-    if (!c || !bboxContains(CAMPUS_BBOX, c.lon, c.lat)) continue;
-    const entranceNodeIds = way.nodes.filter((id) => nodes.get(id)?.tags?.entrance);
-    const feature = {
+  const buildingIndex = []; // { id, name, tags, centroid, outlineNodeIds, ring }
+  const registerBuilding = (osmId, tags, rings, outlineNodeIds) => {
+    const c = ringCentroid(rings[0]);
+    if (!c || !bboxContains(CAMPUS_BBOX, c.lon, c.lat)) return;
+    const entranceIds = [...new Set(outlineNodeIds)].filter((id) => nodes.get(id)?.tags?.entrance);
+    buildings.push({
       type: "Feature",
-      id: way.id,
       properties: {
-        osmId: `way/${way.id}`,
+        osmId,
         name: tags.name ?? null,
-        building: tags.building,
+        building: tags.building ?? "yes",
         levels: tags["building:levels"] ?? null,
         wheelchair: tags.wheelchair ?? null,
         inAcademicArea: inArea(c.lon, c.lat),
-        entrances: entranceNodeIds.length,
+        entrances: entranceIds.length,
       },
-      geometry: { type: "Polygon", coordinates: [coords] },
-    };
-    buildings.push(feature);
-    buildingByWayId.set(way.id, { way, centroid: c, entranceNodeIds, tags });
+      geometry: rings.length === 1 ? { type: "Polygon", coordinates: rings } : { type: "MultiPolygon", coordinates: rings.map((r) => [r]) },
+    });
+    buildingIndex.push({ id: osmId, name: tags.name ?? null, tags, centroid: c, entranceIds, ring: rings[0] });
+  };
+
+  const relationWayIds = new Set();
+  for (const rel of relations) {
+    const t = rel.tags ?? {};
+    if (t.type !== "multipolygon" || !(t.building || (t.amenity && t.name))) continue;
+    const outers = (rel.members ?? []).filter((m) => m.type === "way" && m.role !== "inner").map((m) => waysById.get(m.ref)).filter(Boolean);
+    if (!outers.length) continue;
+    const rings = assembleRings(outers).map((ids) => ids.map((id) => nodes.get(id)).filter(Boolean).map((n) => [round(n.lon), round(n.lat)]));
+    if (!rings.length || rings[0].length < 4) continue;
+    for (const w of outers) relationWayIds.add(w.id);
+    registerBuilding(`relation/${rel.id}`, { building: "yes", ...t }, rings, outers.flatMap((w) => w.nodes));
+  }
+  for (const way of ways) {
+    const tags = way.tags ?? {};
+    if (!tags.building || !isClosed(way) || relationWayIds.has(way.id)) continue;
+    const coords = wayCoords(way, nodes);
+    if (coords.length < 4) continue;
+    registerBuilding(`way/${way.id}`, tags, [coords], way.nodes);
   }
 
-  // ---- 3. Accessibility features -----------------------------------------------
+  const buildingContaining = (lon, lat) => buildingIndex.find((b) => b.name && pointInGeometry(lon, lat, { type: "Polygon", coordinates: [b.ring] }));
+  const nearestBuildingName = (lon, lat, maxM = 60) => {
+    let best = null;
+    let bestD = maxM;
+    for (const b of buildingIndex) {
+      if (!b.name) continue;
+      const d = haversineMeters(lat, lon, b.centroid.lat, b.centroid.lon);
+      if (d < bestD) {
+        bestD = d;
+        best = b.name;
+      }
+    }
+    return best;
+  };
+
+  // =====================================================================
+  // 3. Indoor layer (corridors / rooms / doors per level)
+  // =====================================================================
+  const indoor = [];
+  for (const way of ways) {
+    const t = way.tags ?? {};
+    const coords = wayCoords(way, nodes);
+    if (coords.length < 2) continue;
+    const mid = coords[Math.floor(coords.length / 2)];
+    if (!bboxContains(CAMPUS_BBOX, mid[0], mid[1])) continue;
+    if (t.indoor === "room" || t.indoor === "area" || (t.indoor && isClosed(way) && !t.highway)) {
+      if (!isClosed(way)) continue;
+      indoor.push({
+        type: "Feature",
+        properties: { osmId: `way/${way.id}`, kind: "room", name: t.name ?? null, ref: t.ref ?? null, level: t.level ?? GROUND, indoor: t.indoor },
+        geometry: { type: "Polygon", coordinates: [coords] },
+      });
+    } else if (t.highway && t.level != null && (t.highway === "corridor" || t.indoor || t.highway === "footway" || t.highway === "steps" || t.highway === "path")) {
+      indoor.push({
+        type: "Feature",
+        properties: { osmId: `way/${way.id}`, kind: t.highway === "steps" ? "stairs" : isMultiLevel(t) ? "connector" : "corridor", name: t.name ?? null, level: t.level, highway: t.highway },
+        geometry: { type: "LineString", coordinates: coords },
+      });
+    }
+  }
+  for (const n of nodes.values()) {
+    const t = n.tags;
+    if (!t || !inCampus(n)) continue;
+    if (t.indoor === "door" || (t.door && !t.entrance)) {
+      indoor.push({ type: "Feature", properties: { osmId: `node/${n.id}`, kind: "door", level: t.level ?? GROUND, name: t.name ?? null }, geometry: { type: "Point", coordinates: [round(n.lon), round(n.lat)] } });
+    }
+  }
+
+  // =====================================================================
+  // 4. Accessibility features
+  // =====================================================================
   const features = [];
   const featureOf = (osmId, kind, tags, geometry, lon, lat) => {
     const extra = overrides[osmId] ?? {};
@@ -207,6 +401,7 @@ function main() {
         osmId,
         kind,
         name: tags.name ?? null,
+        level: tags.level ?? null,
         check_date: extra.check_date ?? tags.check_date ?? null,
         wheelchair: tags.wheelchair ?? null,
         inAcademicArea: inArea(lon, lat),
@@ -217,73 +412,56 @@ function main() {
       geometry,
     };
   };
-
   for (const n of nodes.values()) {
-    if (!n.tags || !bboxContains(CAMPUS_BBOX, n.lon, n.lat)) continue;
+    if (!n.tags || !inCampus(n)) continue;
     const kind = classifyFeature(n.tags);
     if (!kind) continue;
-    features.push(
-      featureOf(`node/${n.id}`, kind, n.tags, { type: "Point", coordinates: [round(n.lon), round(n.lat)] }, n.lon, n.lat),
-    );
+    features.push(featureOf(`node/${n.id}`, kind, n.tags, { type: "Point", coordinates: [round(n.lon), round(n.lat)] }, n.lon, n.lat));
   }
   for (const way of ways) {
     if (!way.tags || way.tags.building) continue;
     const kind = classifyFeature(way.tags);
     if (!kind) continue;
-    const coords = wayCoords(way, nodes).map(([lo, la]) => [round(lo), round(la)]);
+    const coords = wayCoords(way, nodes);
     if (coords.length < 2) continue;
     const mid = coords[Math.floor(coords.length / 2)];
     if (!bboxContains(CAMPUS_BBOX, mid[0], mid[1])) continue;
     features.push(featureOf(`way/${way.id}`, kind, way.tags, { type: "LineString", coordinates: coords }, mid[0], mid[1]));
   }
 
-  // ---- 4. Places (search index) ------------------------------------------------
+  // =====================================================================
+  // 5. Places (search index)
+  // =====================================================================
   const places = [];
   const seenName = new Set();
 
-  const buildingNameFor = (lon, lat, maxM = 60) => {
-    let best = null;
-    let bestD = maxM;
-    for (const b of buildingByWayId.values()) {
-      if (!b.tags.name) continue;
-      const d = haversineMeters(lat, lon, b.centroid.lat, b.centroid.lon);
-      if (d < bestD) {
-        bestD = d;
-        best = b.tags.name;
-      }
-    }
-    return best;
-  };
-
-  for (const [wayId, b] of buildingByWayId) {
-    if (!b.tags.name) continue;
-    const key = b.tags.name.toLowerCase();
+  for (const b of buildingIndex) {
+    if (!b.name) continue;
+    const key = b.name.toLowerCase();
     if (seenName.has(key)) continue;
     seenName.add(key);
     places.push({
-      id: `way/${wayId}`,
-      name: b.tags.name,
+      id: b.id,
+      name: b.name,
       kind: "building",
       category: b.tags.amenity ?? b.tags.building ?? null,
       lon: round(b.centroid.lon),
       lat: round(b.centroid.lat),
       inAcademicArea: inArea(b.centroid.lon, b.centroid.lat),
-      // Entrance nodes that are already part of the routing graph snap perfectly.
-      entranceNodeIds: b.entranceNodeIds.filter((id) => graphNodes[id]).map(String),
-      // All entrance positions so the client can snap from the nearest one.
-      entrances: b.entranceNodeIds.map((id) => {
+      snapNodes: b.entranceIds.flatMap(keysOfNode),
+      entrances: b.entranceIds.map((id) => {
         const n = nodes.get(id);
-        return { id: String(id), lon: round(n.lon), lat: round(n.lat), type: n.tags.entrance, wheelchair: n.tags.wheelchair ?? null };
+        return { id: String(id), lon: round(n.lon), lat: round(n.lat), type: n.tags.entrance, level: n.tags.level ?? null, wheelchair: n.tags.wheelchair ?? null, keys: keysOfNode(id) };
       }),
     });
   }
 
   for (const n of nodes.values()) {
     const t = n.tags;
-    if (!t || !bboxContains(CAMPUS_BBOX, n.lon, n.lat)) continue;
+    if (!t || !inCampus(n)) continue;
     if (t.entrance) {
-      const host = buildingNameFor(n.lon, n.lat);
-      const label = t.name || (host ? `${host} — ${t.entrance === "main" ? "main entrance" : "entrance"}` : null);
+      const host = buildingIndex.find((b) => b.entranceIds.includes(n.id))?.name ?? nearestBuildingName(n.lon, n.lat);
+      const label = t.name || (host ? `${host} — ${t.entrance === "main" ? "main entrance" : "entrance"}${t.level != null && t.level !== "0" ? ` (level ${t.level})` : ""}` : null);
       if (!label) continue;
       places.push({
         id: `node/${n.id}`,
@@ -292,9 +470,10 @@ function main() {
         category: t.entrance,
         lon: round(n.lon),
         lat: round(n.lat),
+        level: t.level ?? null,
         wheelchair: t.wheelchair ?? null,
         inAcademicArea: inArea(n.lon, n.lat),
-        nodeId: graphNodes[n.id] ? String(n.id) : null,
+        snapNodes: keysOfNode(n.id),
       });
     } else if (t.name && (t.amenity || t.shop || t.leisure || t.tourism || t.office || t.healthcare)) {
       const key = t.name.toLowerCase();
@@ -307,59 +486,203 @@ function main() {
         category: t.amenity ?? t.shop ?? t.leisure ?? t.tourism ?? t.office ?? t.healthcare,
         lon: round(n.lon),
         lat: round(n.lat),
+        level: t.level ?? null,
         inAcademicArea: inArea(n.lon, n.lat),
-        nodeId: graphNodes[n.id] ? String(n.id) : null,
+        snapNodes: keysOfNode(n.id),
       });
     }
   }
-  // Named non-building areas (sports grounds, parks, hostels mapped as areas, …)
+
+  // Indoor rooms (lecture halls inside a complex, numbered rooms, offices).
+  for (const way of ways) {
+    const t = way.tags ?? {};
+    if (!(t.indoor === "room" || t.indoor === "area") || !isClosed(way)) continue;
+    if (!t.name && !t.ref) continue;
+    const coords = wayCoords(way, nodes);
+    const c = ringCentroid(coords);
+    if (!c || !bboxContains(CAMPUS_BBOX, c.lon, c.lat)) continue;
+    const level = parseLevels(t.level)[0];
+    const host = buildingContaining(c.lon, c.lat)?.name ?? nearestBuildingName(c.lon, c.lat, 80);
+    const rawName = t.name ?? t.ref;
+    const base = /^[\dA-Za-z]?-?\d+[A-Za-z]?$/.test(rawName) ? `Room ${rawName}` : rawName;
+    const name = host && !base.toLowerCase().includes(host.toLowerCase()) ? `${base} (${host})` : base;
+    const key = name.toLowerCase();
+    if (seenName.has(key)) continue;
+    seenName.add(key);
+    // Doors / outline nodes that sit on the routing graph at this level.
+    const snapNodes = way.nodes.map((id) => nodeKey(id, level)).filter((k) => graphNodes[k]);
+    places.push({
+      id: `way/${way.id}`,
+      name,
+      kind: "room",
+      category: t.indoor,
+      lon: round(c.lon),
+      lat: round(c.lat),
+      level,
+      building: host ?? null,
+      inAcademicArea: inArea(c.lon, c.lat),
+      snapNodes,
+    });
+  }
+
+  // Named non-building areas (sports grounds, parks, …)
   for (const way of ways) {
     const t = way.tags;
-    if (!t?.name || t.building || t.highway || !isClosed(way)) continue;
+    if (!t?.name || t.building || t.highway || t.indoor || !isClosed(way)) continue;
     if (!(t.amenity || t.leisure || t.landuse === "education" || t.tourism || t.office)) continue;
     const key = t.name.toLowerCase();
     if (seenName.has(key)) continue;
     const c = ringCentroid(wayCoords(way, nodes));
     if (!c || !bboxContains(CAMPUS_BBOX, c.lon, c.lat)) continue;
     seenName.add(key);
-    places.push({
-      id: `way/${way.id}`,
-      name: t.name,
-      kind: "landmark",
-      category: t.amenity ?? t.leisure ?? t.tourism ?? t.office ?? "area",
-      lon: round(c.lon),
-      lat: round(c.lat),
-      inAcademicArea: inArea(c.lon, c.lat),
-    });
+    places.push({ id: `way/${way.id}`, name: t.name, kind: "landmark", category: t.amenity ?? t.leisure ?? t.tourism ?? t.office ?? "area", lon: round(c.lon), lat: round(c.lat), inAcademicArea: inArea(c.lon, c.lat), snapNodes: [] });
   }
 
-  places.sort((a, b) => a.name.localeCompare(b.name));
+  places.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
 
-  // ---- 5. Write -----------------------------------------------------------------
+  // =====================================================================
+  // 6. Data-quality report for the mappers
+  // =====================================================================
+  const issues = [];
+  const issue = (type, severity, message, lon, lat, osm) => issues.push({ type, severity, message, lon: round(lon), lat: round(lat), osm });
+
+  // 6a. Connected components (structural, normal profile).
+  const adjacency = new Map();
+  for (const [a, b] of edges) {
+    if (!adjacency.has(a)) adjacency.set(a, []);
+    if (!adjacency.has(b)) adjacency.set(b, []);
+    adjacency.get(a).push(b);
+    adjacency.get(b).push(a);
+  }
+  const compOf = new Map();
+  const comps = [];
+  for (const start of Object.keys(graphNodes)) {
+    if (compOf.has(start)) continue;
+    const id = comps.length;
+    const members = [];
+    const stack = [start];
+    compOf.set(start, id);
+    while (stack.length) {
+      const k = stack.pop();
+      members.push(k);
+      for (const nb of adjacency.get(k) ?? []) if (!compOf.has(nb)) {
+        compOf.set(nb, id);
+        stack.push(nb);
+      }
+    }
+    comps.push(members);
+  }
+  const mainComp = comps.reduce((best, c, i) => (c.length > comps[best].length ? i : best), 0);
+  const islands = comps
+    .map((members, i) => ({ i, members }))
+    .filter((c) => c.i !== mainComp && c.members.length >= 2)
+    .sort((a, b) => b.members.length - a.members.length);
+  for (const isl of islands.slice(0, 80)) {
+    let lon = 0;
+    let lat = 0;
+    const kinds = new Set();
+    for (const k of isl.members) {
+      lon += graphNodes[k][0];
+      lat += graphNodes[k][1];
+    }
+    lon /= isl.members.length;
+    lat /= isl.members.length;
+    for (const k of isl.members) for (const nb of adjacency.get(k) ?? []) {
+      const e = edges.find((ed) => (ed[0] === k && ed[1] === nb) || (ed[1] === k && ed[0] === nb));
+      if (e) kinds.add(graphWays[e[3]]?.highway ?? "?");
+    }
+    const near = nearestBuildingName(lon, lat, 120);
+    if (!inArea(lon, lat) && isl.members.length < 10) continue; // outside the detailed zone: only large islands matter
+    issue("island", inArea(lon, lat) ? "high" : "low", `Disconnected group of ${isl.members.length} path points (${[...kinds].join(", ")})${near ? ` near ${near}` : ""} — not reachable from the rest of the campus`, lon, lat, `node/${isl.members[0].split("@")[0]}`);
+  }
+
+  // 6b. Entrances not on any path / not reaching the main network.
+  for (const n of nodes.values()) {
+    const t = n.tags;
+    if (!t?.entrance || !inCampus(n) || !inArea(n.lon, n.lat)) continue;
+    const keys = keysOfNode(n.id);
+    const host = nearestBuildingName(n.lon, n.lat, 80) ?? "a building";
+    if (!keys.length) issue("entrance-unconnected", "high", `Entrance of ${host} (level ${t.level ?? "0"}) is not on any footway/corridor — join a path to this node`, n.lon, n.lat, `node/${n.id}`);
+    else if (!keys.some((k) => compOf.get(k) === mainComp)) issue("entrance-island", "high", `Entrance of ${host} (level ${t.level ?? "0"}) connects only to an isolated path group`, n.lon, n.lat, `node/${n.id}`);
+  }
+
+  // 6c. Multi-level ways that are not clearly stairs / ramps / lifts.
+  for (const way of connectorWays) {
+    const t = way.tags;
+    const explicit = t.highway === "steps" || t.highway === "elevator" || t.ramp === "yes" || t["ramp:wheelchair"] === "yes" || t.incline;
+    const coords = wayCoords(way, nodes);
+    if (!coords.length) continue;
+    const mid = coords[Math.floor(coords.length / 2)];
+    if (!explicit) issue("ambiguous-connector", "high", `Footway tagged level=${t.level} but no incline/ramp/steps — it acts as a free level change for everyone. Retag level=<one floor>, or add incline=…% + ramp=yes`, mid[0], mid[1], `way/${way.id}`);
+    const inc = String(t.incline ?? "").match(/(\d+(?:\.\d+)?)\s*%/);
+    if (inc && parseFloat(inc[1]) > 8) issue("steep-ramp", "medium", `Ramp incline ${t.incline} exceeds 8 % — heavily penalised for wheelchair users`, mid[0], mid[1], `way/${way.id}`);
+    for (const end of [way.nodes[0], way.nodes[way.nodes.length - 1]]) {
+      const others = (parentWays.get(end) ?? []).filter((w) => w !== way && (isRoutableWay(w.tags ?? {}) || w.tags?.building || w.tags?.indoor));
+      const n = nodes.get(end);
+      if (n && !others.length && !n.tags?.entrance) issue("dead-end-connector", "high", `${t.highway === "steps" ? "Stairs" : "Ramp/connector"} (level ${t.level}) ends in mid-air — nothing attached at this end`, n.lon, n.lat, `way/${way.id}`);
+    }
+  }
+
+  // 6d. Level "walls": node shared by ways of different single levels with no connector there.
+  for (const [id, levels] of levelsAtNode) {
+    if (levels.size < 2) continue;
+    const hasConnector = (parentWays.get(id) ?? []).some((w) => graphWays[w.id] && isMultiLevel(w.tags)) || nodes.get(id)?.tags?.highway === "elevator";
+    if (hasConnector) continue;
+    const n = nodes.get(id);
+    if (!n || !inArea(n.lon, n.lat)) continue;
+    issue("level-wall", "medium", `Paths on levels ${[...levels].join(" and ")} share this node but there are no stairs/ramp/lift here — treated as a wall. If people can change level here, draw the stairs/ramp`, n.lon, n.lat, `node/${id}`);
+  }
+
+  // 6e. Named Academic-Area buildings without any entrance node.
+  for (const b of buildingIndex) {
+    if (!b.name || !inArea(b.centroid.lon, b.centroid.lat)) continue;
+    if (!b.entranceIds.length) issue("building-no-entrance", "low", `${b.name} has no entrance node — routes will end at the nearest outdoor path instead of the door`, b.centroid.lon, b.centroid.lat, b.id);
+  }
+
+  const sev = { high: 0, medium: 1, low: 2 };
+  issues.sort((a, b) => sev[a.severity] - sev[b.severity] || a.type.localeCompare(b.type));
+  const qa = { generatedAt: graph.generatedAt, mainComponentSize: comps[mainComp].length, components: comps.length, issues };
+
+  // =====================================================================
+  // 7. Write
+  // =====================================================================
   mkdirSync(OUT_DIR, { recursive: true });
   writeFileSync(join(OUT_DIR, "graph.json"), JSON.stringify(graph));
   writeFileSync(join(OUT_DIR, "buildings.geojson"), JSON.stringify({ type: "FeatureCollection", features: buildings }));
+  writeFileSync(join(OUT_DIR, "indoor.geojson"), JSON.stringify({ type: "FeatureCollection", features: indoor }));
   writeFileSync(join(OUT_DIR, "features.geojson"), JSON.stringify({ type: "FeatureCollection", features }));
   writeFileSync(join(OUT_DIR, "places.json"), JSON.stringify(places));
+  writeFileSync(join(OUT_DIR, "qa.json"), JSON.stringify(qa, null, 1));
 
   const kinds = {};
   for (const f of features) kinds[f.properties.kind] = (kinds[f.properties.kind] ?? 0) + 1;
+  const levelSet = new Set();
+  for (const k of Object.keys(graphNodes)) {
+    const l = graphNodes[k][2];
+    if (!l.includes(";")) levelSet.add(l);
+  }
   const meta = {
     builtAt: graph.generatedAt,
     osmFetchedAt: raw.fetchedAt ?? null,
-    graph: { nodes: Object.keys(graphNodes).length, edges: edges.length, ways: Object.keys(graphWays).length },
+    graph: { nodes: Object.keys(graphNodes).length, edges: edges.length, ways: Object.keys(graphWays).length, connectors: connectorWays.filter((w) => graphWays[w.id]).length, components: comps.length, mainComponent: comps[mainComp].length },
+    levels: [...levelSet].sort((a, b) => Number(a) - Number(b)),
     buildings: buildings.length,
     namedBuildings: buildings.filter((b) => b.properties.name).length,
+    indoor: indoor.length,
     features: features.length,
     featureKinds: kinds,
     places: places.length,
+    rooms: places.filter((p) => p.kind === "room").length,
+    qaIssues: { high: issues.filter((i) => i.severity === "high").length, medium: issues.filter((i) => i.severity === "medium").length, low: issues.filter((i) => i.severity === "low").length },
   };
   writeFileSync(join(OUT_DIR, "meta.json"), JSON.stringify(meta, null, 2));
 
-  console.log(`Graph:     ${meta.graph.nodes} nodes, ${meta.graph.edges} edges, ${meta.graph.ways} ways`);
-  console.log(`Buildings: ${meta.buildings} (${meta.namedBuildings} named)`);
+  console.log(`Graph:     ${meta.graph.nodes} nodes, ${meta.graph.edges} edges, ${meta.graph.ways} ways, ${meta.graph.connectors} level connectors, ${meta.graph.components} components (main ${meta.graph.mainComponent})`);
+  console.log(`Levels:    ${meta.levels.join(", ")}`);
+  console.log(`Buildings: ${meta.buildings} (${meta.namedBuildings} named)   Indoor: ${meta.indoor}   Rooms searchable: ${meta.rooms}`);
   console.log(`Features:  ${meta.features} ${JSON.stringify(kinds)}`);
   console.log(`Places:    ${meta.places}`);
+  console.log(`QA:        ${meta.qaIssues.high} high, ${meta.qaIssues.medium} medium, ${meta.qaIssues.low} low → public/data/qa.json`);
 }
 
 main();

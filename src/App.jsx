@@ -4,17 +4,21 @@ import MapView from "./components/MapView.jsx";
 import SearchBox from "./components/SearchBox.jsx";
 import ProfilePicker from "./components/ProfilePicker.jsx";
 import RouteSummary from "./components/RouteSummary.jsx";
-import { loadAcademicArea, loadBuildings, loadFeatures, loadMeta, loadPlaces } from "./lib/data.js";
+import FloorSwitcher from "./components/FloorSwitcher.jsx";
+import QaPanel from "./components/QaPanel.jsx";
+import { loadAcademicArea, loadBuildings, loadFeatures, loadIndoor, loadMeta, loadPlaces, loadQa } from "./lib/data.js";
 import { loadGraph } from "./lib/routing/graph.js";
 import { computeRoutes, RouteError } from "./lib/routing/route.js";
+import { GROUND } from "./lib/levels.js";
 
 export default function App() {
-  const [data, setData] = useState({ places: null, features: null, buildings: null, academicArea: null, meta: null, graph: null });
+  const [data, setData] = useState({ places: null, features: null, buildings: null, indoor: null, academicArea: null, meta: null, qa: null, graph: null });
   const [loadError, setLoadError] = useState(null);
 
   const [from, setFrom] = useState(null);
   const [to, setTo] = useState(null);
   const [profile, setProfile] = useState("normal");
+  const [level, setLevel] = useState(GROUND);
 
   const [result, setResult] = useState(null);
   const [routeError, setRouteError] = useState(null);
@@ -23,21 +27,25 @@ export default function App() {
 
   const [showFeatures, setShowFeatures] = useState(true);
   const [showBuildings, setShowBuildings] = useState(true);
+  const [showIndoor, setShowIndoor] = useState(true);
+  const [showQa, setShowQa] = useState(false);
+  const [showSnap, setShowSnap] = useState(false);
   const [panelOpen, setPanelOpen] = useState(true);
 
   // ---- load static data + graph -------------------------------------------------------
   useEffect(() => {
     let cancelled = false;
-    Promise.all([loadPlaces(), loadFeatures(), loadBuildings(), loadAcademicArea(), loadMeta(), loadGraph()])
-      .then(([places, features, buildings, academicArea, meta, graph]) => {
+    Promise.all([loadPlaces(), loadFeatures(), loadBuildings(), loadIndoor(), loadAcademicArea(), loadMeta(), loadQa(), loadGraph()])
+      .then(([places, features, buildings, indoor, academicArea, meta, qa, graph]) => {
         if (cancelled) return;
-        setData({ places, features, buildings, academicArea, meta, graph });
-        // Restore a shared link: ?from=<place id or name>&to=…&profile=wheelchair
+        setData({ places, features, buildings, indoor, academicArea, meta, qa, graph });
         const q = new URLSearchParams(window.location.search);
         const find = (v) => (v ? places.find((p) => p.id === v || p.name.toLowerCase() === v.toLowerCase()) ?? null : null);
         if (q.get("from")) setFrom(find(q.get("from")));
         if (q.get("to")) setTo(find(q.get("to")));
         if (q.get("profile") === "wheelchair") setProfile("wheelchair");
+        if (q.get("level") && graph.levels.includes(q.get("level"))) setLevel(q.get("level"));
+        if (q.get("qa") === "1") setShowQa(true);
       })
       .catch((err) => !cancelled && setLoadError(err.message));
     return () => {
@@ -49,12 +57,14 @@ export default function App() {
   useEffect(() => {
     if (!data.places) return;
     const q = new URLSearchParams();
-    if (from?.kind !== "point" && from) q.set("from", from.id);
-    if (to?.kind !== "point" && to) q.set("to", to.id);
+    if (from && from.kind !== "point") q.set("from", from.id);
+    if (to && to.kind !== "point") q.set("to", to.id);
     if (profile !== "normal") q.set("profile", profile);
+    if (level !== GROUND) q.set("level", level);
+    if (showQa) q.set("qa", "1");
     const qs = q.toString();
     window.history.replaceState(null, "", qs ? `?${qs}` : window.location.pathname);
-  }, [data.places, from, to, profile]);
+  }, [data.places, from, to, profile, level, showQa]);
 
   // ---- compute the route whenever inputs change ---------------------------------------
   useEffect(() => {
@@ -67,6 +77,9 @@ export default function App() {
       const res = computeRoutes(data.graph, from, to, profile, { academicArea: data.academicArea?.features?.[0]?.geometry });
       setResult(res);
       setRouteError(null);
+      // Show the floor the route starts on.
+      const startLevel = res.main.directions[0]?.level;
+      if (startLevel != null && data.graph.levels.includes(startLevel)) setLevel(startLevel);
     } catch (err) {
       setResult(null);
       setRouteError(err instanceof RouteError ? err.message : `Routing failed: ${err.message}`);
@@ -85,29 +98,34 @@ export default function App() {
   }, [data.features]);
 
   const ready = Boolean(data.graph && data.places);
+  const pick = (setter) => (p) => {
+    setter(p);
+    setPanelOpen(true);
+    if (p?.level != null && !String(p.level).includes(";") && data.graph?.levels.includes(String(p.level))) setLevel(String(p.level));
+  };
 
   return (
     <div className="app">
       <MapView
         academicArea={data.academicArea}
         buildings={data.buildings}
+        indoor={data.indoor}
         features={data.features}
         places={data.places}
+        qa={data.qa}
         from={from}
         to={to}
         result={result}
         hoveredStep={hoveredStep}
         focus={focus}
-        onSetFrom={(p) => {
-          setFrom(p);
-          setPanelOpen(true);
-        }}
-        onSetTo={(p) => {
-          setTo(p);
-          setPanelOpen(true);
-        }}
+        level={level}
+        onSetFrom={pick(setFrom)}
+        onSetTo={pick(setTo)}
         showFeatures={showFeatures}
         showBuildings={showBuildings}
+        showIndoor={showIndoor}
+        showQa={showQa}
+        showSnap={showSnap}
       />
 
       <button type="button" className="panel-toggle" onClick={() => setPanelOpen((o) => !o)} aria-expanded={panelOpen}>
@@ -129,8 +147,8 @@ export default function App() {
 
         <section className="inputs" aria-label="Route inputs">
           <div className="inputs-rows">
-            <SearchBox places={data.places} value={from} onChange={setFrom} placeholder="Choose starting point" marker="from" />
-            <SearchBox places={data.places} value={to} onChange={setTo} placeholder="Choose destination" marker="to" />
+            <SearchBox places={data.places} value={from} onChange={pick(setFrom)} placeholder="Choose starting point" marker="from" />
+            <SearchBox places={data.places} value={to} onChange={pick(setTo)} placeholder="Choose destination" marker="to" />
           </div>
           <button type="button" className="swap" onClick={swap} title="Swap start and destination" aria-label="Swap start and destination">
             ⇅
@@ -145,16 +163,16 @@ export default function App() {
 
           {ready && !from && !to && (
             <div className="hint">
-              <p>Search a building above, or click anywhere on the map and choose <em>Directions from here</em>.</p>
+              <p>
+                Search a building, room or entrance above, or click anywhere on the map and choose <em>Directions from here</em>.
+              </p>
               <p className="hint-small">
-                Detailed accessibility coverage is inside the dashed <span className="legend-swatch academic" /> Academic Area. Elsewhere the
-                route follows whatever OpenStreetMap already has.
+                Detailed accessibility coverage is inside the dashed <span className="legend-swatch academic" /> Academic Area. Use the floor buttons on the right to look at
+                upper floors; routes change floor only via stairs, ramps or lifts.
               </p>
             </div>
           )}
-          {ready && (from || to) && !(from && to) && (
-            <div className="hint">Now choose {from ? "a destination" : "a starting point"}.</div>
-          )}
+          {ready && (from || to) && !(from && to) && <div className="hint">Now choose {from ? "a destination" : "a starting point"}.</div>}
 
           {routeError && <div className="route-error">{routeError}</div>}
 
@@ -162,7 +180,10 @@ export default function App() {
             <RouteSummary
               result={result}
               onHoverStep={setHoveredStep}
-              onSelectStep={(step) => setFocus({ coord: step.coord, t: Date.now() })}
+              onSelectStep={(step) => {
+                if (step.level != null && data.graph.levels.includes(step.level)) setLevel(step.level);
+                setFocus({ coord: step.coord, t: Date.now() });
+              }}
             />
           )}
         </section>
@@ -173,7 +194,13 @@ export default function App() {
               <input type="checkbox" checked={showBuildings} onChange={(e) => setShowBuildings(e.target.checked)} /> Buildings
             </label>
             <label>
-              <input type="checkbox" checked={showFeatures} onChange={(e) => setShowFeatures(e.target.checked)} /> Accessibility features
+              <input type="checkbox" checked={showIndoor} onChange={(e) => setShowIndoor(e.target.checked)} /> Indoor
+            </label>
+            <label>
+              <input type="checkbox" checked={showFeatures} onChange={(e) => setShowFeatures(e.target.checked)} /> Features
+            </label>
+            <label title="Show where each endpoint joined the path network">
+              <input type="checkbox" checked={showSnap} onChange={(e) => setShowSnap(e.target.checked)} /> Snap points
             </label>
           </div>
           {showFeatures && (
@@ -190,11 +217,21 @@ export default function App() {
           )}
         </section>
 
+        <QaPanel
+          qa={data.qa}
+          open={showQa}
+          onToggle={() => setShowQa((o) => !o)}
+          onFocus={(issue) => {
+            setFocus({ coord: [issue.lon, issue.lat], zoom: 18.5, issue, t: Date.now() });
+            setPanelOpen(window.matchMedia("(min-width: 900px)").matches);
+          }}
+        />
+
         <footer className="panel-foot">
           {data.meta && (
             <span>
-              {data.meta.graph.nodes.toLocaleString()} path points · {data.meta.namedBuildings} named buildings · OSM snapshot{" "}
-              {data.meta.osmFetchedAt ? new Date(data.meta.osmFetchedAt).toLocaleDateString() : "—"}
+              {data.meta.graph.nodes.toLocaleString()} path points on {data.meta.levels?.length ?? 1} floor{(data.meta.levels?.length ?? 1) > 1 ? "s" : ""} · {data.meta.namedBuildings} named
+              buildings · {data.meta.rooms ?? 0} rooms · OSM snapshot {data.meta.osmFetchedAt ? new Date(data.meta.osmFetchedAt).toLocaleDateString() : "—"}
             </span>
           )}
           <span>
@@ -209,6 +246,8 @@ export default function App() {
           </span>
         </footer>
       </aside>
+
+      <FloorSwitcher levels={data.graph?.levels} value={level} onChange={setLevel} highlight={result?.main.levels ?? []} />
     </div>
   );
 }

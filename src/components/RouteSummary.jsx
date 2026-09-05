@@ -1,4 +1,5 @@
 import { formatDistance, formatDuration } from "../lib/geo/haversine.js";
+import { levelLabel } from "../lib/levels.js";
 
 /** Rotation (degrees, clockwise) of the arrow icon for each manoeuvre. */
 const TURN_ROTATION = {
@@ -31,10 +32,34 @@ function FlagIcon() {
   );
 }
 
+/** Stairs / ramp / lift glyph with an up or down arrow for floor changes. */
+function LevelIcon({ kind, up, color }) {
+  return (
+    <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+      {kind === "elevator" ? (
+        <>
+          <rect x="4" y="3" width="16" height="18" rx="2" fill="none" stroke={color} strokeWidth="2" />
+          <path d="M9 10l3-3 3 3M9 14l3 3 3-3" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+        </>
+      ) : kind === "stairs" ? (
+        <path d="M3 20h5v-4h4v-4h4V8h5" fill="none" stroke={color} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+      ) : (
+        <path d="M3 19L21 8v11z" fill={color} opacity="0.85" />
+      )}
+      {kind !== "elevator" && (
+        <path d={up ? "M17 3l3 3.5h-2V10h-2V6.5h-2L17 3z" : "M17 10l3-3.5h-2V3h-2v3.5h-2L17 10z"} fill={color} />
+      )}
+    </svg>
+  );
+}
+
 function stepIcon(step) {
   if (step.type === "arrive") return <FlagIcon />;
-  const rotation = step.type === "depart" ? 0 : TURN_ROTATION[step.turn] ?? 0;
   const color = step.kind && KIND_COLOR[step.kind] && step.kind !== "walk" ? KIND_COLOR[step.kind] : "#5f6368";
+  if (step.level != null && step.levelAfter != null && step.level !== step.levelAfter) {
+    return <LevelIcon kind={step.kind} up={Number(step.levelAfter) > Number(step.level)} color={color} />;
+  }
+  const rotation = step.type === "depart" ? 0 : TURN_ROTATION[step.turn] ?? 0;
   return <Arrow rotation={rotation} color={color} />;
 }
 
@@ -60,6 +85,8 @@ export default function RouteSummary({ result, onHoverStep, onSelectStep }) {
   if (c.skywalk) chips.push({ text: `${c.skywalk} skywalk${c.skywalk > 1 ? "s" : ""}`, tone: "neutral" });
   if (c.elevator) chips.push({ text: `${c.elevator} elevator${c.elevator > 1 ? "s" : ""}`, tone: "good" });
   if (c.crossing) chips.push({ text: `${c.crossing} road crossing${c.crossing > 1 ? "s" : ""}`, tone: "neutral" });
+  if (main.levelChanges) chips.push({ text: `${main.levelChanges} floor change${main.levelChanges > 1 ? "s" : ""}`, tone: "neutral" });
+  else if ((main.levels?.length ?? 1) === 1 && main.levels?.[0] !== "0") chips.push({ text: `Stays on ${levelLabel(main.levels[0]).toLowerCase()}`, tone: "neutral" });
   const footShare = main.footM + main.roadM > 0 ? main.footM / (main.footM + main.roadM) : 0;
   chips.push({ text: footShare >= 0.6 ? "Mostly footpaths" : footShare <= 0.25 ? "Mostly along roads" : "Footpaths + roads", tone: "neutral" });
 
@@ -104,7 +131,8 @@ export default function RouteSummary({ result, onHoverStep, onSelectStep }) {
         {main.directions.map((step, i) => (
           <li
             key={i}
-            className={`step step-${step.type}`}
+            className={`step step-${step.type}${step.level != null && step.levelAfter != null && step.level !== step.levelAfter ? " step-level" : ""}`}
+            title={step.level != null ? levelLabel(step.level) : undefined}
             onMouseEnter={() => onHoverStep?.(step)}
             onMouseLeave={() => onHoverStep?.(null)}
             onClick={() => onSelectStep?.(step)}
