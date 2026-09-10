@@ -1,6 +1,6 @@
 {
- "generatedAt": "2026-09-05T15:01:29.861Z",
- "mainComponentSize": 6079,
+ "generatedAt": "2026-09-06T20:10:09.277Z",
+ "mainComponentSize": 6080,
  "components": 40,
  "issues": [
   {
@@ -178,14 +178,6 @@
    "lon": 80.232487,
    "lat": 26.511023,
    "osm": "node/13657840072"
-  },
-  {
-   "type": "entrance-unconnected",
-   "severity": "high",
-   "message": "Entrance of Tutorial Block (level 0) is not on any footway/corridor — join a path to this node",
-   "lon": 80.232388,
-   "lat": 26.511141,
-   "osm": "node/13657840088"
   },
   {
    "type": "entrance-unconnected",
