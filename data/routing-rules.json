@@ -14,5 +14,18 @@
         }
       }
     }
+  },
+  "rooms": {
+    "way/1555349507": {
+      "name": "Lecture Hall 20",
+      "doors": {
+        "wheelchair": {
+          "*": ["node/14152648919"]
+        },
+        "normal": {
+          "*": ["node/14152648919"]
+        }
+      }
+    }
   }
 }

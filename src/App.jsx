@@ -12,6 +12,13 @@ import { loadGraph } from "./lib/routing/graph.js";
 import { computeRoutes, rankByWalking, RouteError } from "./lib/routing/route.js";
 import { GROUND } from "./lib/levels.js";
 
+/** Determine whether current local time is night (between 18:30 and 06:00). */
+export function isNightTime(date = new Date()) {
+  const hours = date.getHours();
+  const minutes = date.getMinutes();
+  return hours >= 19 || hours < 6 || (hours === 18 && minutes >= 30);
+}
+
 export default function App() {
   const [data, setData] = useState({ places: null, features: null, buildings: null, indoor: null, paths: null, academicArea: null, meta: null, qa: null, amenities: null, graph: null });
   const [loadError, setLoadError] = useState(null);
@@ -29,9 +36,40 @@ export default function App() {
 
   const [panelOpen, setPanelOpen] = useState(true);
   const [finder, setFinder] = useState(null);
-  const [night, setNight] = useState(false);
+  const [night, setNight] = useState(() => {
+    const q = new URLSearchParams(window.location.search);
+    if (q.has("night")) return q.get("night") === "1";
+    try {
+      const saved = localStorage.getItem("lathi-night-choice");
+      if (saved === "day") return false;
+      if (saved === "night") return true;
+    } catch {}
+    return isNightTime();
+  });
+  const [lang, setLang] = useState(() => {
+    const q = new URLSearchParams(window.location.search);
+    if (q.get("lang") === "hi" || q.get("lang") === "en") return q.get("lang");
+    try {
+      return localStorage.getItem("lathi-lang") || "en";
+    } catch {}
+    return "en";
+  });
   const [nearestBusy, setNearestBusy] = useState(false);
   const [nearestError, setNearestError] = useState(null);
+
+  const handleNight = (val) => {
+    setNight(val);
+    try {
+      localStorage.setItem("lathi-night-choice", val ? "night" : "day");
+    } catch {}
+  };
+
+  const handleLang = (val) => {
+    setLang(val);
+    try {
+      localStorage.setItem("lathi-lang", val);
+    } catch {}
+  };
 
   // ---- load static data + graph -------------------------------------------------------
   useEffect(() => {
@@ -51,7 +89,8 @@ export default function App() {
         if (MAP_MODES.some((m) => m.id === q.get("mode"))) setMode(q.get("mode"));
         if (q.get("qa") === "1") setShowQa(true);
         if (AMENITY_FINDERS.some((f) => f.id === q.get("find"))) setFinder(q.get("find"));
-        if (q.get("night") === "1") setNight(true);
+        if (q.has("night")) setNight(q.get("night") === "1");
+        if (q.get("lang") === "hi" || q.get("lang") === "en") setLang(q.get("lang"));
       })
       .catch((err) => !cancelled && setLoadError(err.message));
     return () => {
@@ -68,11 +107,11 @@ export default function App() {
     if (profile !== "normal") q.set("profile", profile);
     if (level !== GROUND) q.set("level", level);
     if (mode !== "buildings") q.set("mode", mode);
-    if (finder) q.set("find", finder);
     if (night) q.set("night", "1");
+    if (lang === "hi") q.set("lang", "hi");
     const qs = q.toString();
     window.history.replaceState(null, "", qs ? `?${qs}` : window.location.pathname);
-  }, [data.places, from, to, profile, level, mode, finder, night]);
+  }, [data.places, from, to, profile, level, mode, finder, night, lang]);
 
   // ---- compute the route whenever inputs change ---------------------------------------
   useEffect(() => {
@@ -164,7 +203,9 @@ export default function App() {
         finder={finder}
         counts={amenityCounts}
         night={night}
-        onNight={setNight}
+        onNight={handleNight}
+        lang={lang}
+        onLang={handleLang}
         onFinder={(id) => {
           setFinder(id);
           setNearestError(null);
@@ -256,6 +297,8 @@ export default function App() {
           {result && (
             <RouteSummary
               result={result}
+              lang={lang}
+              onLang={handleLang}
               onHoverStep={setHoveredStep}
               onSelectStep={(step) => {
                 if (step.level != null && data.graph.levels.includes(step.level)) setLevel(step.level);

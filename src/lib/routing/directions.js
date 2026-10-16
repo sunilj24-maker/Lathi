@@ -69,6 +69,91 @@ function levelChangePhrase(fromLevel, toLevel, verbless = false) {
   return verbless ? `to ${levelLabel(toLevel)}` : `${dir} to ${levelLabel(toLevel)}`;
 }
 
+const COMPASS_HI = {
+  north: "उत्तर",
+  "north-east": "उत्तर-पूर्व",
+  east: "पूर्व",
+  "south-east": "दक्षिण-पूर्व",
+  south: "दक्षिण",
+  "south-west": "दक्षिण-पश्चिम",
+  west: "पश्चिम",
+  "north-west": "उत्तर-पश्चिम",
+};
+
+const TURN_HI = {
+  straight: "सीधे",
+  left: "बाएँ",
+  right: "दाएँ",
+  "slight-left": "हल्का बाएँ",
+  "slight-right": "हल्का दाएँ",
+  "sharp-left": "तेज़ बाएँ",
+  "sharp-right": "तेज़ दाएँ",
+  uturn: "यू-टर्न",
+};
+
+const WAY_LABEL_HI = {
+  stairs: "सीढ़ियों",
+  lift: "लिफ़्ट",
+  "indoor corridor": "कॉरिडोर",
+  "elevated walkway": "ऊपरी रास्ते",
+  skywalk: "स्काईवॉक",
+  footpath: "फ़ुटपाथ",
+  crossing: "क्रॉसिंग",
+  "cycle track": "साइकिल ट्रैक",
+  "parking area": "पार्किंग क्षेत्र",
+  "service lane": "सर्विस लेन",
+  lane: "गली",
+  track: "ट्रैक",
+  road: "सड़क",
+  path: "रास्ते",
+};
+
+export function wayLabelHi(label) {
+  if (!label) return "रास्ते";
+  return WAY_LABEL_HI[label.toLowerCase()] ?? label;
+}
+
+export function levelLabelHi(level) {
+  if (level == null) return "";
+  const s = String(level).trim();
+  if (s === "0") return "ग्राउंड फ़्लोर";
+  if (s === "1") return "Level 1";
+  if (s === "2") return "Level 2";
+  if (s === "3") return "Level 3";
+  if (s === "-1") return "बेसमेंट";
+  return `Level ${s}`;
+}
+
+function verbForHi(turn, kind, label) {
+  const lbl = wayLabelHi(label);
+  const t = TURN_HI[turn] ?? turn;
+  if (turn === "straight") return `${lbl} पर सीधे चलते रहें`;
+  if (turn === "uturn") return `${lbl} पर यू-टर्न लें`;
+  return `${lbl} पर ${t} मुड़ें`;
+}
+
+function connectorTextHi(turn, kind, label, fromLevel, toLevel, tags) {
+  const t = TURN_HI[turn] ?? turn;
+  const turnPrefix = turn && turn !== "straight" && turn !== "uturn" ? `${t} मुड़ें और ` : "";
+  const targetLvl = levelLabelHi(toLevel);
+  const lvlPart = targetLvl ? `${targetLvl} के लिए ` : "";
+
+  if (kind === "stairs") {
+    const up = Number(toLevel) > Number(fromLevel);
+    const action = up ? "सीढ़ियाँ चढ़ें" : Number(toLevel) < Number(fromLevel) ? "सीढ़ियाँ उतरें" : "सीढ़ियाँ लें";
+    const count = tags.step_count ? ` (${tags.step_count} सीढ़ियाँ)` : "";
+    return `${turnPrefix}${lvlPart}${action}${count}`;
+  }
+  if (kind === "elevator") {
+    return `${turnPrefix}${lvlPart}लिफ़्ट लें`;
+  }
+  if (kind === "ramp") {
+    const grade = tags.incline && /%/.test(tags.incline) ? ` (${tags.incline})` : "";
+    return `${turnPrefix}${lvlPart}रैंप लें${grade}`;
+  }
+  return verbForHi(turn ?? "straight", kind, label);
+}
+
 function connectorText(turn, kind, label, fromLevel, toLevel, tags) {
   const change = levelChangePhrase(fromLevel, toLevel, kind === "elevator");
   const turnPrefix = turn && turn !== "straight" && turn !== "uturn" ? `Turn ${turnPhrase(turn)} and ` : "";
@@ -98,7 +183,17 @@ export function buildDirections(graph, nodeIds, wayIds, names = {}) {
   };
 
   if (nodeIds.length < 2) {
-    return [{ type: "arrive", kind: "arrive", text: `You are already at ${names.to ?? "your destination"}`, distance: 0, coord: graph.coord(nodeIds[0]), level: floorOf(nodeIds[0]) }];
+    return [
+      {
+        type: "arrive",
+        kind: "arrive",
+        text: `You are already at ${names.to ?? "your destination"}`,
+        textHi: `आप पहले से ही ${names.to ?? "गंतव्य"} पर हैं`,
+        distance: 0,
+        coord: graph.coord(nodeIds[0]),
+        level: floorOf(nodeIds[0]),
+      },
+    ];
   }
 
   // 1. Per-edge records (skip zero-length transfer edges: they carry no geometry).
@@ -126,7 +221,17 @@ export function buildDirections(graph, nodeIds, wayIds, names = {}) {
     });
   }
   if (!edges.length) {
-    return [{ type: "arrive", kind: "arrive", text: `Arrive at ${names.to ?? "your destination"}`, distance: 0, coord: graph.coord(nodeIds[nodeIds.length - 1]), level: floorOf(nodeIds[0]) }];
+    return [
+      {
+        type: "arrive",
+        kind: "arrive",
+        text: `Arrive at ${names.to ?? "your destination"}`,
+        textHi: `${names.to ?? "गंतव्य"} पर पहुँच गए`,
+        distance: 0,
+        coord: graph.coord(nodeIds[nodeIds.length - 1]),
+        level: floorOf(nodeIds[0]),
+      },
+    ];
   }
 
   // 2. Merge consecutive edges with the same label + kind into legs.
@@ -185,12 +290,18 @@ export function buildDirections(graph, nodeIds, wayIds, names = {}) {
   // 3. Emit steps.
   const steps = [];
   const first = legs[0];
+  const firstCmp = firstBearing(first) != null ? compassName(firstBearing(first)) : null;
+  const firstCmpHi = firstCmp ? (COMPASS_HI[firstCmp] ?? firstCmp) : "";
+  const firstLblHi = wayLabelHi(first.label);
   steps.push({
     type: "depart",
     kind: first.kind,
     text: first.connector
       ? connectorText(null, first.kind, first.label, first.levelBefore, first.levelAfter, first.tags)
-      : `Head ${firstBearing(first) != null ? compassName(firstBearing(first)) + " " : ""}on ${first.label}`,
+      : `Head ${firstCmp ? firstCmp + " " : ""}on ${first.label}`,
+    textHi: first.connector
+      ? connectorTextHi(null, first.kind, first.label, first.levelBefore, first.levelAfter, first.tags)
+      : (firstCmpHi ? `${firstLblHi} पर ${firstCmpHi} की ओर चलें` : `${firstLblHi} पर चलें`),
     distance: first.length,
     coord: first.edges[0].a,
     level: first.levelBefore,
@@ -210,6 +321,7 @@ export function buildDirections(graph, nodeIds, wayIds, names = {}) {
       turn,
       kind: leg.kind,
       text: leg.connector ? connectorText(turn, leg.kind, leg.label, leg.levelBefore, leg.levelAfter, leg.tags) : verbFor(turn, leg.kind, leg.label),
+      textHi: leg.connector ? connectorTextHi(turn, leg.kind, leg.label, leg.levelBefore, leg.levelAfter, leg.tags) : verbForHi(turn, leg.kind, leg.label),
       distance: leg.length,
       coord: leg.edges[0].a,
       level: leg.levelBefore,
@@ -219,10 +331,13 @@ export function buildDirections(graph, nodeIds, wayIds, names = {}) {
   }
 
   const last = legs[legs.length - 1];
+  const lvlSuffix = last.levelAfter && last.levelAfter !== "0" ? ` (${levelLabel(last.levelAfter)})` : "";
+  const lvlSuffixHi = last.levelAfter && last.levelAfter !== "0" ? ` (${levelLabelHi(last.levelAfter)})` : "";
   steps.push({
     type: "arrive",
     kind: "arrive",
-    text: `Arrive at ${names.to ?? "your destination"}${last.levelAfter && last.levelAfter !== "0" ? ` (${levelLabel(last.levelAfter)})` : ""}`,
+    text: `Arrive at ${names.to ?? "your destination"}${lvlSuffix}`,
+    textHi: `${names.to ?? "गंतव्य"} पर पहुँच गए${lvlSuffixHi}`,
     distance: 0,
     coord: last.edges[last.edges.length - 1].b,
     level: last.levelAfter,

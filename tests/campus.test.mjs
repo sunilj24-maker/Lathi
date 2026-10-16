@@ -69,3 +69,34 @@ test("largest connected component covers most of the graph", () => {
   const share = largest / graph.nodeIds.length;
   assert.ok(share > 0.85, `largest component only ${(share * 100).toFixed(1)} % of nodes`);
 });
+
+test("Lecture Hall 16-20 and NLHC are present with correct levels", () => {
+  const p16 = places.find((p) => p.name.includes("Lecture Hall 16"));
+  const p17 = places.find((p) => p.name.includes("Lecture Hall 17"));
+  const p18 = places.find((p) => p.name.includes("Lecture Hall 18"));
+  const p19 = places.find((p) => p.name.includes("Lecture Hall 19"));
+  const p20 = places.find((p) => p.name.includes("Lecture Hall 20"));
+  const nlhc = places.find((p) => p.name === "New Lecture Hall Complex");
+
+  assert.ok(p16, "Lecture Hall 16 missing from places.json");
+  assert.ok(p17, "Lecture Hall 17 missing from places.json");
+  assert.ok(p18, "Lecture Hall 18 missing from places.json");
+  assert.ok(p19, "Lecture Hall 19 missing from places.json");
+  assert.ok(p20, "Lecture Hall 20 missing from places.json");
+  assert.ok(nlhc, "New Lecture Hall Complex missing from places.json");
+
+  assert.equal(p18.level, "0", "LH 18 must be level 0 (ground floor)");
+  assert.equal(p19.level, "0", "LH 19 must be level 0 (ground floor)");
+  assert.equal(p20.level, "1", "LH 20 must be level 1 (first floor)");
+  assert.ok(nlhc.aliases.includes("NLHC"), "NLHC must have alias NLHC");
+  assert.ok(p20.aliases.includes("L 20"), "LH 20 must have alias 'L 20'");
+  assert.ok(p20.snapNodes.some((k) => k.startsWith("14152648919")), "LH 20 snapNodes must point to the lift");
+
+  // Route to LH 20 ends at the lift close to it
+  const from = place("Lecture Hall 1");
+  const { main: normalRoute } = computeRoutes(graph, from, p20, "normal", { academicArea: academic });
+  const { main: wcRoute } = computeRoutes(graph, from, p20, "wheelchair", { academicArea: academic });
+  assert.ok(normalRoute.nodeIds.at(-1).startsWith("14152648919"), "Normal route to LH 20 must end at the lift");
+  assert.ok(wcRoute.nodeIds.at(-1).startsWith("14152648919"), "Wheelchair route to LH 20 must end at the lift");
+});
+

@@ -79,9 +79,9 @@ function loadOverrides() {
 
 function loadRoutingRules() {
   const p = join(ROOT, "data/routing-rules.json");
-  if (!existsSync(p)) return { buildings: {} };
+  if (!existsSync(p)) return { buildings: {}, rooms: {} };
   const raw = JSON.parse(readFileSync(p, "utf8"));
-  return { buildings: raw.buildings ?? {} };
+  return { buildings: raw.buildings ?? {}, rooms: raw.rooms ?? {} };
 }
 
 function loadAcademicArea() {
@@ -440,11 +440,12 @@ function main(preloadedRaw = null) {
     if (coords.length < 2) continue;
     const mid = coords[Math.floor(coords.length / 2)];
     if (!bboxContains(CAMPUS_BBOX, mid[0], mid[1])) continue;
-    if (t.indoor === "room" || t.indoor === "area" || (t.indoor && isClosed(way) && !t.highway)) {
+    const isRoom = t.indoor === "room" || t.indoor === "area" || (t["building:part"] && (t.name || t.indoor)) || (t.indoor && isClosed(way) && !t.highway);
+    if (isRoom) {
       if (!isClosed(way)) continue;
       indoor.push({
         type: "Feature",
-        properties: { osmId: `way/${way.id}`, kind: "room", name: t.name ?? null, ref: t.ref ?? null, level: t.level ?? GROUND, indoor: t.indoor },
+        properties: { osmId: `way/${way.id}`, kind: "room", name: t.name ?? null, ref: t.ref ?? null, level: t.level ?? GROUND, indoor: t.indoor ?? "room" },
         geometry: { type: "Polygon", coordinates: [coords] },
       });
     } else if (t.highway && t.level != null && (t.highway === "corridor" || t.indoor || t.highway === "footway" || t.highway === "steps" || t.highway === "path")) {
@@ -551,11 +552,14 @@ function main(preloadedRaw = null) {
     for (const k of ["short_name", "alt_name", "official_name", "old_name", "name:en", "loc_name", "nickname"]) {
       if (tags[k]) for (const v of String(tags[k]).split(";")) if (v.trim()) out.add(v.trim());
     }
-    const m = (tags.name ?? "").match(/^Lecture Hall\s*(\d+)$/i);
-    if (m) for (const a of [`LH${m[1]}`, `LH ${m[1]}`, `L${m[1]}`, `L-${m[1]}`, `LH-${m[1]}`]) out.add(a);
-    const r = (tags.name ?? "").match(/^Room\s+(\S+)$/i);
+    const name = tags.name ?? "";
+    const m = name.match(/^Lecture Hall\s*(\d+)$/i);
+    if (m) for (const a of [`LH${m[1]}`, `LH ${m[1]}`, `L${m[1]}`, `L ${m[1]}`, `L-${m[1]}`, `LH-${m[1]}`]) out.add(a);
+    if (/New Lecture Hall Complex/i.test(name)) for (const a of ["NLHC", "New LHC", "NLH Complex"]) out.add(a);
+    if (/Old Lecture Hall Complex/i.test(name)) for (const a of ["OLHC", "Old LHC", "OLH Complex"]) out.add(a);
+    const r = name.match(/^Room\s+(\S+)$/i);
     if (r) out.add(r[1]);
-    return [...out].filter((a) => a.toLowerCase() !== (tags.name ?? "").toLowerCase());
+    return [...out].filter((a) => a.toLowerCase() !== name.toLowerCase());
   };
 
   /** Resolve a rules entry's door node ids to graph keys, per profile and floor. */
@@ -646,14 +650,17 @@ function main(preloadedRaw = null) {
   // Indoor rooms (lecture halls inside a complex, numbered rooms, offices).
   for (const way of ways) {
     const t = way.tags ?? {};
-    if (!(t.indoor === "room" || t.indoor === "area") || !isClosed(way)) continue;
+    const isRoom = t.indoor === "room" || t.indoor === "area" || (t["building:part"] && (t.name || t.ref));
+    if (!isRoom || !isClosed(way)) continue;
     if (!t.name && !t.ref) continue;
     const coords = wayCoords(way, nodes);
     const c = ringCentroid(coords);
     if (!c || !bboxContains(CAMPUS_BBOX, c.lon, c.lat)) continue;
     const hostBuilding = buildingContaining(c.lon, c.lat) ?? null;
     const host = hostBuilding?.name ?? nearestBuildingName(c.lon, c.lat, 80);
-    const rule = hostBuilding ? rules.buildings[hostBuilding.id] : null;
+    const buildingRule = hostBuilding ? rules.buildings[hostBuilding.id] : null;
+    const roomRule = rules.rooms?.[`way/${way.id}`] ?? (t.name ? rules.rooms?.[t.name] : null);
+    const rule = roomRule ?? buildingRule;
     const rawName = t.name ?? t.ref;
     const isNumber = /^[\dA-Za-z]?-?\d+[A-Za-z]?$/.test(rawName);
     // Floor: OSM level tag, else (per building rule) the room number's first digit: 1xx -> 0, 2xx -> 1.
@@ -669,7 +676,11 @@ function main(preloadedRaw = null) {
     if (seenName.has(key)) continue;
     seenName.add(key);
     // Doors / outline nodes that sit on the routing graph at this level.
-    const snapNodes = way.nodes.map((id) => nodeKey(id, level)).filter((k) => graphNodes[k]);
+    let snapNodes = way.nodes.map((id) => nodeKey(id, level)).filter((k) => graphNodes[k]);
+    if (!snapNodes.length && rule?.doors) {
+      const allDoorIds = Object.values(rule.doors).flatMap((byL) => Object.values(byL).flat());
+      snapNodes = [...new Set(allDoorIds.flatMap((osmId) => keysOfNode(Number(String(osmId).replace("node/", "")))))];
+    }
     const place = {
       id: `way/${way.id}`,
       name,
@@ -842,6 +853,18 @@ function main(preloadedRaw = null) {
   for (const b of buildingIndex) {
     if (!b.name || !inArea(b.centroid.lon, b.centroid.lat)) continue;
     if (!b.entranceIds.length) issue("building-no-entrance", "low", `${b.name} has no entrance node — routes will end at the nearest outdoor path instead of the door`, b.centroid.lon, b.centroid.lat, b.id);
+  }
+
+  // 6f. Unclosed buildings (common JOSM mistake causing buildings to disappear from OSM & the site)
+  for (const way of ways) {
+    const t = way.tags ?? {};
+    if (t.building && !isClosed(way) && !relationWayIds.has(way.id)) {
+      const coords = wayCoords(way, nodes);
+      const mid = coords[0];
+      if (mid && bboxContains(CAMPUS_BBOX, mid[0], mid[1])) {
+        issue("building-unclosed", "high", `${t.name ?? "Way " + way.id} has building=${t.building} but is not a closed polygon (start node != end node) — OSM and Lathi ignore unclosed buildings`, mid[0], mid[1], `way/${way.id}`);
+      }
+    }
   }
 
   const sev = { high: 0, medium: 1, low: 2 };

@@ -1,8 +1,56 @@
 {
- "generatedAt": "2026-10-13T21:47:49.317Z",
+ "generatedAt": "2026-10-16T10:00:28.563Z",
  "mainComponentSize": 6218,
  "components": 40,
  "issues": [
+  {
+   "type": "building-unclosed",
+   "severity": "high",
+   "message": "Old Lecture Hall Complex has building=university but is not a closed polygon (start node != end node) — OSM and Lathi ignore unclosed buildings",
+   "lon": 80.23303,
+   "lat": 26.51167,
+   "osm": "way/1556352272"
+  },
+  {
+   "type": "building-unclosed",
+   "severity": "high",
+   "message": "National Centre for Flexible Electronics has building=university but is not a closed polygon (start node != end node) — OSM and Lathi ignore unclosed buildings",
+   "lon": 80.230935,
+   "lat": 26.511923,
+   "osm": "way/1568040383"
+  },
+  {
+   "type": "building-unclosed",
+   "severity": "high",
+   "message": "National Centre for Flexible Electronics has building=university but is not a closed polygon (start node != end node) — OSM and Lathi ignore unclosed buildings",
+   "lon": 80.230936,
+   "lat": 26.511991,
+   "osm": "way/1568040384"
+  },
+  {
+   "type": "building-unclosed",
+   "severity": "high",
+   "message": "Core Lab has building=university but is not a closed polygon (start node != end node) — OSM and Lathi ignore unclosed buildings",
+   "lon": 80.232371,
+   "lat": 26.513542,
+   "osm": "way/1568040807"
+  },
+  {
+   "type": "building-unclosed",
+   "severity": "high",
+   "message": "Western Labs has building=university but is not a closed polygon (start node != end node) — OSM and Lathi ignore unclosed buildings",
+   "lon": 80.23131,
+   "lat": 26.512595,
+   "osm": "way/1568051525"
+  },
+  {
+   "type": "building-unclosed",
+   "severity": "high",
+   "message": "Faculty Building has building=university but is not a closed polygon (start node != end node) — OSM and Lathi ignore unclosed buildings",
+   "lon": 80.233106,
+   "lat": 26.513054,
+   "osm": "way/1568055167"
+  },
   {
    "type": "entrance-island",
    "severity": "high",
@@ -634,6 +682,14 @@
    "lon": 80.235875,
    "lat": 26.510128,
    "osm": "way/1131994409"
+  },
+  {
+   "type": "building-no-entrance",
+   "severity": "low",
+   "message": "New Lecture Hall Complex has no entrance node — routes will end at the nearest outdoor path instead of the door",
+   "lon": 80.233845,
+   "lat": 26.510755,
+   "osm": "way/1135339096"
   },
   {
    "type": "building-no-entrance",

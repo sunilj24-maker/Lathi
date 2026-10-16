@@ -384,6 +384,10 @@ body {
 
 .route-head {
   padding: 12px 0 6px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .route-time {
@@ -1479,11 +1483,62 @@ body {
   white-space: nowrap;
 }
 
-/* ---------------------------------------------------------------- day / night */
+/* ---------------------------------------------------------------- day / night & language */
+
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.lang-toggle {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: var(--shadow);
+}
+
+.lang-toggle button {
+  height: 30px;
+  padding: 0 11px;
+  border: none;
+  border-radius: 15px;
+  background: none;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.lang-toggle button.active {
+  background: var(--blue);
+  color: #fff;
+  font-weight: 600;
+}
+
+.route-head .lang-toggle {
+  background: #f1f3f4;
+  box-shadow: none;
+  border: 1px solid #e0e0e0;
+}
+
+.route-head .lang-toggle button {
+  height: 26px;
+  padding: 0 9px;
+  font-size: 12px;
+}
+
+.route-head .lang-toggle button.active {
+  background: var(--blue);
+  color: #fff;
+}
 
 .daynight {
   display: flex;
-  margin-left: auto;
   padding: 3px;
   border-radius: 18px;
   background: #fff;

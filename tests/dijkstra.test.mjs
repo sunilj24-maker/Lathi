@@ -81,4 +81,6 @@ test("directions name the ways and finish with an arrive step", () => {
   assert.match(steps[1].text, /Right Path/);
   assert.equal(steps.at(-1).type, "arrive");
   assert.equal(steps.at(-1).text, "Arrive at Library");
+  assert.match(steps[0].textHi, /Top Path/);
+  assert.equal(steps.at(-1).textHi, "Library पर पहुँच गए");
 });
