@@ -31,11 +31,12 @@ export function snapPlace(graph, place, profileId = "normal") {
 export function snapTiers(graph, place, profileId = "normal") {
   const wheelchair = profileId === "wheelchair";
   const usable = (e) => !(wheelchair && e.wheelchair === "no");
+  const usableNode = (k) => !(wheelchair && graph.tagsOfNode(k)?.wheelchair === "no");
   const seen = new Set();
   const tier = () => {
     const list = [];
     list.push2 = (c) => {
-      if (c && graph.has(c.nodeId) && !seen.has(c.nodeId)) {
+      if (c && graph.has(c.nodeId) && usableNode(c.nodeId) && !seen.has(c.nodeId)) {
         seen.add(c.nodeId);
         list.push(c);
       }
@@ -61,24 +62,28 @@ export function snapTiers(graph, place, profileId = "normal") {
 
   // 2. Own doors.
   const doors = tier();
-  const entrances = [...(place.entrances ?? [])].filter(usable).sort((a, b) => (b.type === "main") - (a.type === "main"));
+  const allEntrances = [...(place.entrances ?? [])].sort((a, b) => (b.type === "main") - (a.type === "main"));
+  const entrances = allEntrances.filter(usable);
   for (const e of entrances) for (const k of byFloorFirst(e.keys ?? [])) doors.push2({ nodeId: k, snapDistance: 0, via: "entrance", anchor: [e.lon, e.lat], level: floorOf(k, single(e.level)) });
   for (const k of byFloorFirst(place.snapNodes ?? [])) doors.push2({ nodeId: k, snapDistance: 0, via: place.kind === "room" ? "door" : "entrance", anchor: [place.lon, place.lat], level: graph.levelOf(k) });
 
   // 3. Near an entrance, on the entrance's floor.
   const near = tier();
-  for (const e of entrances) {
-    const hit = graph.nearestNode(e.lon, e.lat, { level: single(e.level) ?? GROUND, maxMeters: SNAP_MAX_METERS });
+  for (const e of allEntrances) {
+    const hit = graph.nearestNode(e.lon, e.lat, { level: single(e.level) ?? GROUND, maxMeters: SNAP_MAX_METERS, filter: usableNode });
     if (hit) near.push2({ nodeId: hit.nodeId, snapDistance: hit.distance, via: "near-entrance", anchor: [e.lon, e.lat], level: graph.levelOf(hit.nodeId) });
   }
 
   // 4. Nearest path to the place itself: its own floor first, then any floor.
   const nearest = tier();
   const wantLevel = single(place.level) ?? GROUND;
-  const hitLevel = graph.nearestNode(place.lon, place.lat, { level: wantLevel, maxMeters: place.kind === "room" ? 60 : SNAP_MAX_METERS });
-  if (hitLevel) nearest.push2({ nodeId: hitLevel.nodeId, snapDistance: hitLevel.distance, via: "nearest", anchor: [place.lon, place.lat], level: graph.levelOf(hitLevel.nodeId) });
-  const hitAny = graph.nearestNode(place.lon, place.lat, { maxMeters: SNAP_MAX_METERS, filter: (k) => !graph.isConnectorNode(k) });
-  if (hitAny) nearest.push2({ nodeId: hitAny.nodeId, snapDistance: hitAny.distance, via: "nearest", anchor: [place.lon, place.lat], level: graph.levelOf(hitAny.nodeId) });
+  const maxM = place.kind === "room" ? 60 : SNAP_MAX_METERS;
+  for (const hit of graph.nearestNodes(place.lon, place.lat, { level: wantLevel, maxMeters: maxM, limit: 5, filter: usableNode })) {
+    nearest.push2({ nodeId: hit.nodeId, snapDistance: hit.distance, via: "nearest", anchor: [place.lon, place.lat], level: graph.levelOf(hit.nodeId) });
+  }
+  for (const hit of graph.nearestNodes(place.lon, place.lat, { maxMeters: SNAP_MAX_METERS, limit: 5, filter: (k) => !graph.isConnectorNode(k) && usableNode(k) })) {
+    nearest.push2({ nodeId: hit.nodeId, snapDistance: hit.distance, via: "nearest", anchor: [place.lon, place.lat], level: graph.levelOf(hit.nodeId) });
+  }
 
   return [explicit, rules, doors, near, nearest].filter((t) => t.length);
 }

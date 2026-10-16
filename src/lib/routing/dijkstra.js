@@ -54,7 +54,7 @@ export class MinHeap {
  * @param {string} startId
  * @param {string} goalId
  * @param {string} profileId  "normal" | "wheelchair"
- * @param {{ heuristicWeight?: number }} [opts]
+ * @param {{ heuristicWeight?: number, night?: boolean }} [opts]
  * @returns {{ nodeIds: string[], wayIds: string[], cost: number, lengthM: number, visited: number } | null}
  */
 export function shortestPath(graph, startId, goalId, profileId, opts = {}) {
@@ -62,6 +62,7 @@ export function shortestPath(graph, startId, goalId, profileId, opts = {}) {
   if (startId === goalId) return { nodeIds: [startId], wayIds: [], cost: 0, lengthM: 0, visited: 1 };
 
   const hWeight = opts.heuristicWeight ?? MIN_FACTOR;
+  const costOpts = { night: Boolean(opts.night) };
   const h = hWeight > 0 ? (id) => graph.distanceBetween(id, goalId) * hWeight : () => 0;
 
   const dist = new Map([[startId, 0]]);
@@ -81,7 +82,7 @@ export function shortestPath(graph, startId, goalId, profileId, opts = {}) {
     const dCur = dist.get(current);
     for (const edge of graph.neighbours(current)) {
       if (closed.has(edge.to)) continue;
-      const c = edgeCost(profileId, edge.length, graph.wayTags(edge.wayId), graph.tagsOfNode(edge.to));
+      const c = edgeCost(profileId, edge.length, graph.wayTags(edge.wayId), graph.tagsOfNode(edge.to), costOpts);
       if (!Number.isFinite(c)) continue;
       const nd = dCur + c;
       if (nd < (dist.get(edge.to) ?? Infinity)) {

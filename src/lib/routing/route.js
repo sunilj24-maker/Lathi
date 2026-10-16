@@ -3,9 +3,11 @@
  */
 import { PROFILES, RESTRICT_ROUTING_TO_ACADEMIC_AREA, ROAD_HIGHWAYS } from "../../../data/config.js";
 import { pointInGeometry } from "../geo/pointInPolygon.js";
+import { haversineMeters } from "../geo/haversine.js";
 import { shortestPath } from "./dijkstra.js";
+import { lightingOf } from "./profiles.js";
 import { snapTiers } from "./snap.js";
-import { buildDirections, wayKind } from "./directions.js";
+import { buildDirections, wayKind, wayLabel } from "./directions.js";
 import { levelLabel } from "../levels.js";
 
 export class RouteError extends Error {
@@ -43,14 +45,59 @@ function summarise(graph, nodeIds, wayIds) {
 }
 
 /**
+ * Consecutive dim / dark stretches along a path, each with a length, a label
+ * and the nearest named building, plus their geometry for the map.
+ */
+function unlitSections(graph, nodeIds, wayIds, places) {
+  const sections = [];
+  let cur = null;
+  wayIds.forEach((wayId, i) => {
+    const tags = graph.wayTags(wayId);
+    const lighting = lightingOf(tags);
+    const len = graph.distanceBetween(nodeIds[i], nodeIds[i + 1]);
+    if (lighting === "lit") {
+      cur = null;
+      return;
+    }
+    if (!cur || cur.lighting !== lighting) {
+      cur = { lighting, lengthM: 0, label: wayLabel(tags), coords: [graph.coord(nodeIds[i])], level: graph.levelOf(nodeIds[i]) };
+      sections.push(cur);
+    }
+    cur.lengthM += len;
+    cur.coords.push(graph.coord(nodeIds[i + 1]));
+  });
+  const buildings = (places ?? []).filter((p) => p.kind === "building");
+  for (const s of sections) {
+    s.coord = s.coords[Math.floor(s.coords.length / 2)];
+    let best = null;
+    let bestD = 120;
+    for (const b of buildings) {
+      const d = haversineMeters(s.coord[1], s.coord[0], b.lat, b.lon);
+      if (d < bestD) {
+        bestD = d;
+        best = b.name;
+      }
+    }
+    s.near = best;
+  }
+  const geojson = {
+    type: "FeatureCollection",
+    features: sections.map((s) => ({ type: "Feature", properties: { lighting: s.lighting }, geometry: { type: "LineString", coordinates: s.coords } })),
+  };
+  return { sections: sections.map(({ coords, ...rest }) => rest), geojson };
+}
+
+/**
  * @param {import('./graph.js').Graph} graph
  * @param {object} from  place object (see places.json) or {lon, lat, name}
  * @param {object} to
  * @param {string} profileId
- * @param {{ academicArea?: object }} [ctx]  academicArea = GeoJSON geometry
+ * @param {{ academicArea?: object, night?: boolean, places?: object[] }} [ctx]
+ *   academicArea = GeoJSON geometry; night = avoid dim/dark ways; places = for naming dark stretches
  */
 export function computeRoute(graph, from, to, profileId, ctx = {}) {
   const profile = PROFILES.find((p) => p.id === profileId) ?? PROFILES[0];
+  const night = Boolean(ctx.night);
 
   const warnings = [];
   if (ctx.academicArea) {
@@ -85,7 +132,7 @@ export function computeRoute(graph, from, to, profileId, ctx = {}) {
       let best = null;
       for (const fc of ft) {
         for (const tc of tt) {
-          const p = shortestPath(graph, fc.nodeId, tc.nodeId, profile.id);
+          const p = shortestPath(graph, fc.nodeId, tc.nodeId, profile.id, { night });
           if (!p) continue;
           const total = p.cost + fc.snapDistance + tc.snapDistance;
           if (!best || total < best.total) best = { p, fc, tc, total };
@@ -156,7 +203,14 @@ export function computeRoute(graph, from, to, profileId, ctx = {}) {
   if (s.snapDistance > 60) warnings.push(`"${from.name ?? "Start"}" is ${Math.round(s.snapDistance)} m from the nearest mapped path.`);
   if (t.snapDistance > 60) warnings.push(`"${to.name ?? "Destination"}" is ${Math.round(t.snapDistance)} m from the nearest mapped path.`);
 
-  const directions = buildDirections(graph, path.nodeIds, path.wayIds, { from: from.name, to: to.name, startLevel: s.level });
+  const unlit = unlitSections(graph, path.nodeIds, path.wayIds, ctx.places);
+  const lighting = {
+    sections: unlit.sections,
+    dimM: unlit.sections.filter((s) => s.lighting === "dim").reduce((a, s) => a + s.lengthM, 0),
+    darkM: unlit.sections.filter((s) => s.lighting === "dark").reduce((a, s) => a + s.lengthM, 0),
+  };
+
+  const directions = buildDirections(graph, path.nodeIds, path.wayIds, { from: from.name, to: to.name, startLevel: s.level, endLevel: t.level });
   const levelChanges = directions.filter((d) => d.level != null && d.levelAfter != null && d.level !== d.levelAfter).length;
 
   // Where the endpoints actually joined the network (debug overlay for mappers).
@@ -170,6 +224,9 @@ export function computeRoute(graph, from, to, profileId, ctx = {}) {
 
   return {
     profile: profile.id,
+    night,
+    lighting,
+    unlit: unlit.geojson,
     from,
     to,
     snap: { from: s, to: t },
@@ -195,6 +252,25 @@ export function computeRoute(graph, from, to, profileId, ctx = {}) {
 }
 
 /**
+ * Rank candidate destinations by real walking distance from `from`.
+ * Only the `limit` closest as the crow flies are routed, to keep it fast.
+ * @returns {Array<{ item: object, distanceM: number }>} reachable items, nearest first
+ */
+export function rankByWalking(graph, from, items, profileId, ctx = {}, limit = 6) {
+  const crow = (p) => haversineMeters(from.lat, from.lon, p.lat, p.lon);
+  const candidates = [...items].sort((a, b) => crow(a) - crow(b)).slice(0, limit);
+  const ranked = [];
+  for (const item of candidates) {
+    try {
+      ranked.push({ item, distanceM: computeRoute(graph, from, item, profileId, ctx).distanceM });
+    } catch {
+      // unreachable for this profile: leave it out
+    }
+  }
+  return ranked.sort((a, b) => a.distanceM - b.distanceM);
+}
+
+/**
  * Compute the selected profile's route plus, for comparison, the Normal route.
  * Lets the UI say "the shortest route uses 2 staircases; this one avoids them".
  */
@@ -210,5 +286,18 @@ export function computeRoutes(graph, from, to, profileId, ctx = {}) {
       comparison = null;
     }
   }
-  return { main, comparison };
+  // Night: how much dim/dark walking the night route saves over the daytime one.
+  let nightComparison = null;
+  if (main.night) {
+    try {
+      const day = computeRoute(graph, from, to, profileId, { ...ctx, night: false });
+      nightComparison = {
+        avoidedM: Math.max(0, day.lighting.dimM + day.lighting.darkM - (main.lighting.dimM + main.lighting.darkM)),
+        extraM: Math.max(0, main.distanceM - day.distanceM),
+      };
+    } catch {
+      nightComparison = null;
+    }
+  }
+  return { main, comparison, nightComparison };
 }

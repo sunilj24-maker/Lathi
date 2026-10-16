@@ -20,6 +20,7 @@ export const loadMeta = () => once("meta", () => getJson("/data/meta.json").catc
 export const loadIndoor = () => once("indoor", () => getJson("/data/indoor.geojson").catch(() => null));
 export const loadPaths = () => once("paths", () => getJson("/data/paths.geojson").catch(() => null));
 export const loadQa = () => once("qa", () => getJson("/data/qa.json").catch(() => null));
+export const loadAmenities = () => once("amenities", () => getJson("/data/amenities.json").catch(() => []));
 
 /** Build a place-like object from a raw map click (on the floor being viewed). */
 export function pointPlace(lon, lat, label, level = "0") {

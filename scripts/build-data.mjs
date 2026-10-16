@@ -10,6 +10,7 @@
  *   indoor.geojson    corridors, rooms, doors with their level (floor switcher)
  *   features.geojson  accessibility features (ramps, stairs, lifts, crossings, entrances, …)
  *   places.json       searchable buildings / entrances / rooms / landmarks
+ *   amenities.json    water taps, toilets and food places for the top-bar finders
  *   qa.json           data-quality issues for the mappers (islands, unconnected entrances, …)
  *   meta.json         counts + snapshot timestamp shown in the UI
  *
@@ -26,12 +27,14 @@
  * wheelchair, …) apply to the connector edges.
  */
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { CAMPUS_BBOX, ROAD_HIGHWAYS, ROUTABLE_HIGHWAYS } from "../data/config.js";
 import { haversineMeters } from "../src/lib/geo/haversine.js";
 import { pointInGeometry, ringCentroid } from "../src/lib/geo/pointInPolygon.js";
 import { bboxContains } from "../src/lib/geo/bbox.js";
 import { classifyFeature } from "../src/lib/features.js";
+import { lightingOf } from "../src/lib/routing/profiles.js";
 import { GROUND, isMultiLevel, nodeKey, parseLevels } from "../src/lib/levels.js";
 import { parseOsmXml } from "./osm-xml.mjs";
 
@@ -39,6 +42,16 @@ const ROOT = process.cwd();
 const OUT_DIR = join(ROOT, "public/data");
 const ROUTABLE = new Set(ROUTABLE_HIGHWAYS);
 const ELEVATOR_METERS_PER_LEVEL = 4;
+const AMENITY_GROUPS = {
+  drinking_water: "water",
+  water_point: "water",
+  toilets: "toilets",
+  cafe: "food",
+  restaurant: "food",
+  fast_food: "food",
+  food_court: "food",
+  ice_cream: "food",
+};
 
 // ---------------------------------------------------------------- input
 
@@ -143,10 +156,28 @@ function assembleRings(memberWays) {
   return rings;
 }
 
+function writeFileSafe(filePath, content) {
+  for (let attempt = 0; attempt < 5; attempt++) {
+    try {
+      writeFileSync(filePath, content);
+      return;
+    } catch (err) {
+      if (attempt < 4 && ["EBUSY", "EPERM", "EACCES"].includes(err.code)) {
+        const end = Date.now() + 100 * (attempt + 1);
+        while (Date.now() < end) {
+          // brief sync wait for OneDrive / Windows indexer lock release
+        }
+        continue;
+      }
+      throw err;
+    }
+  }
+}
+
 // ---------------------------------------------------------------- main
 
-function main() {
-  const raw = loadRaw();
+function main(preloadedRaw = null) {
+  const raw = preloadedRaw ?? loadRaw();
   const overrides = loadOverrides();
   const academic = loadAcademicArea();
   const inArea = (lon, lat) => pointInGeometry(lon, lat, academic);
@@ -331,7 +362,7 @@ function main() {
       },
       geometry: extraOuters.length ? { type: "MultiPolygon", coordinates: [rings, ...extraOuters.map((r) => [r])] } : { type: "Polygon", coordinates: rings },
     });
-    buildingIndex.push({ id: osmId, name: tags.name ?? null, tags, centroid: c, entranceIds, ring: rings[0] });
+    buildingIndex.push({ id: osmId, name: tags.name ?? null, tags, centroid: c, entranceIds, ring: rings[0], ringIds: new Set(outlineNodeIds) });
   };
 
   const relationWayIds = new Set();
@@ -367,8 +398,16 @@ function main() {
       const t = way.tags ?? {};
       if (!t.building || !t.name) continue;
       const b = byName.get(t.name.toLowerCase());
-      if (!b) continue;
-      for (const id of way.nodes) if (nodes.get(id)?.tags?.entrance && !b.entranceIds.includes(id)) b.entranceIds.push(id);
+      if (b) {
+        for (const id of way.nodes) if (nodes.get(id)?.tags?.entrance && !b.entranceIds.includes(id)) b.entranceIds.push(id);
+      } else if (!isClosed(way)) {
+        // Unclosed building piece whose name doesn't match a closed building:
+        // attach its entrance nodes to any building outline that shares an endpoint with it.
+        const host = buildingIndex.find((x) => way.nodes.some((id) => x.ringIds?.has(id)));
+        if (host) {
+          for (const id of way.nodes) if (nodes.get(id)?.tags?.entrance && !host.entranceIds.includes(id)) host.entranceIds.push(id);
+        }
+      }
     }
     for (const f of buildings) {
       const b = buildingIndex.find((x) => x.id === f.properties.osmId);
@@ -453,6 +492,7 @@ function main() {
         floor: Math.max(...levels.map(Number).filter(Number.isFinite), 0),
         bridge: t.bridge === "yes",
         wheelchair: t.wheelchair ?? null,
+        lighting: lightingOf(t),
       },
       geometry: { type: "LineString", coordinates: coords },
     });
@@ -664,6 +704,48 @@ function main() {
   places.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
 
   // =====================================================================
+  // 5b. Amenities: water taps, toilets, food (top-bar finders)
+  // =====================================================================
+  const amenities = [];
+  const placeById = new Map(places.map((p) => [p.id, p]));
+  const amenityItem = (id, tags, lon, lat, group) => {
+    const host = buildingContaining(lon, lat)?.name ?? nearestBuildingName(lon, lat, 80);
+    const generic = group === "water" ? "Drinking water" : group === "toilets" ? "Toilets" : "Food";
+    const name = tags.name ?? tags["name:en"] ?? (host ? `${generic} (${host})` : generic);
+    const known = placeById.get(id);
+    return {
+      id,
+      name,
+      kind: "amenity",
+      group,
+      category: tags.amenity,
+      lon: round(lon),
+      lat: round(lat),
+      level: tags.level != null ? parseLevels(tags.level)[0] : null,
+      building: host ?? null,
+      inAcademicArea: inArea(lon, lat),
+      openingHours: tags.opening_hours ?? null,
+      wheelchair: tags.wheelchair ?? null,
+      cuisine: tags.cuisine ?? null,
+      snapNodes: known?.snapNodes ?? [],
+      ...(known?.entrances ? { entrances: known.entrances } : {}),
+    };
+  };
+  for (const n of nodes.values()) {
+    const group = AMENITY_GROUPS[n.tags?.amenity];
+    if (!group || !inCampus(n)) continue;
+    amenities.push({ ...amenityItem(`node/${n.id}`, n.tags, n.lon, n.lat, group), snapNodes: keysOfNode(n.id) });
+  }
+  for (const way of ways) {
+    const group = AMENITY_GROUPS[way.tags?.amenity];
+    if (!group || !isClosed(way)) continue;
+    const c = ringCentroid(wayCoords(way, nodes));
+    if (!c || !bboxContains(CAMPUS_BBOX, c.lon, c.lat)) continue;
+    amenities.push(amenityItem(`way/${way.id}`, way.tags, c.lon, c.lat, group));
+  }
+  amenities.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+
+  // =====================================================================
   // 6. Data-quality report for the mappers
   // =====================================================================
   const issues = [];
@@ -770,13 +852,14 @@ function main() {
   // 7. Write
   // =====================================================================
   mkdirSync(OUT_DIR, { recursive: true });
-  writeFileSync(join(OUT_DIR, "graph.json"), JSON.stringify(graph));
-  writeFileSync(join(OUT_DIR, "buildings.geojson"), JSON.stringify({ type: "FeatureCollection", features: buildings }));
-  writeFileSync(join(OUT_DIR, "indoor.geojson"), JSON.stringify({ type: "FeatureCollection", features: indoor }));
-  writeFileSync(join(OUT_DIR, "paths.geojson"), JSON.stringify({ type: "FeatureCollection", features: paths }));
-  writeFileSync(join(OUT_DIR, "features.geojson"), JSON.stringify({ type: "FeatureCollection", features }));
-  writeFileSync(join(OUT_DIR, "places.json"), JSON.stringify(places));
-  writeFileSync(join(OUT_DIR, "qa.json"), JSON.stringify(qa, null, 1));
+  writeFileSafe(join(OUT_DIR, "graph.json"), JSON.stringify(graph));
+  writeFileSafe(join(OUT_DIR, "buildings.geojson"), JSON.stringify({ type: "FeatureCollection", features: buildings }));
+  writeFileSafe(join(OUT_DIR, "indoor.geojson"), JSON.stringify({ type: "FeatureCollection", features: indoor }));
+  writeFileSafe(join(OUT_DIR, "paths.geojson"), JSON.stringify({ type: "FeatureCollection", features: paths }));
+  writeFileSafe(join(OUT_DIR, "features.geojson"), JSON.stringify({ type: "FeatureCollection", features }));
+  writeFileSafe(join(OUT_DIR, "places.json"), JSON.stringify(places));
+  writeFileSafe(join(OUT_DIR, "amenities.json"), JSON.stringify(amenities));
+  writeFileSafe(join(OUT_DIR, "qa.json"), JSON.stringify(qa, null, 1));
 
   const kinds = {};
   for (const f of features) kinds[f.properties.kind] = (kinds[f.properties.kind] ?? 0) + 1;
@@ -799,14 +882,21 @@ function main() {
     rooms: places.filter((p) => p.kind === "room").length,
     qaIssues: { high: issues.filter((i) => i.severity === "high").length, medium: issues.filter((i) => i.severity === "medium").length, low: issues.filter((i) => i.severity === "low").length },
   };
-  writeFileSync(join(OUT_DIR, "meta.json"), JSON.stringify(meta, null, 2));
+  writeFileSafe(join(OUT_DIR, "meta.json"), JSON.stringify(meta, null, 2));
 
   console.log(`Graph:     ${meta.graph.nodes} nodes, ${meta.graph.edges} edges, ${meta.graph.ways} ways, ${meta.graph.connectors} level connectors, ${meta.graph.components} components (main ${meta.graph.mainComponent})`);
   console.log(`Levels:    ${meta.levels.join(", ")}`);
   console.log(`Buildings: ${meta.buildings} (${meta.namedBuildings} named)   Indoor: ${meta.indoor}   Rooms searchable: ${meta.rooms}`);
   console.log(`Features:  ${meta.features} ${JSON.stringify(kinds)}`);
   console.log(`Places:    ${meta.places}`);
+  console.log(`Amenities: ${amenities.length} ${JSON.stringify(Object.groupBy(amenities, (a) => a.group), (k, v) => (Array.isArray(v) ? v.length : v))}`);
   console.log(`QA:        ${meta.qaIssues.high} high, ${meta.qaIssues.medium} medium, ${meta.qaIssues.low} low → public/data/qa.json`);
 }
 
-main();
+export function buildData(preloadedRaw = null) {
+  main(preloadedRaw);
+}
+
+const isMain = process.argv[1] && resolve(fileURLToPath(import.meta.url)) === resolve(process.argv[1]);
+if (isMain) main();
+

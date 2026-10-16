@@ -91,21 +91,26 @@ export class Graph {
    * @param {{ level?: string|null, maxMeters?: number, filter?: (key: string) => boolean }} [opts]
    */
   nearestNode(lon, lat, opts = {}) {
-    const { level = null, maxMeters = Infinity, filter } = opts;
-    let best = null;
-    let bestD = maxMeters;
+    return this.nearestNodes(lon, lat, { ...opts, limit: 1 })[0] ?? null;
+  }
+
+  /**
+   * Up to `limit` nearest graph nodes to a lon/lat, sorted closest first.
+   * @param {{ level?: string|null, maxMeters?: number, limit?: number, filter?: (key: string) => boolean }} [opts]
+   */
+  nearestNodes(lon, lat, opts = {}) {
+    const { level = null, maxMeters = Infinity, limit = 5, filter } = opts;
+    const hits = [];
     for (const key of this.nodeIds) {
       const n = this.nodes[key];
       if (Math.abs(n[1] - lat) > 0.01 || Math.abs(n[0] - lon) > 0.01) continue;
       if (level != null && n[2] !== level) continue;
       if (filter && !filter(key)) continue;
       const d = haversineMeters(lat, lon, n[1], n[0]);
-      if (d < bestD) {
-        bestD = d;
-        best = key;
-      }
+      if (d < maxMeters) hits.push({ nodeId: key, distance: d });
     }
-    return best ? { nodeId: best, distance: bestD } : null;
+    hits.sort((a, b) => a.distance - b.distance);
+    return hits.slice(0, limit);
   }
 }
 

@@ -75,7 +75,7 @@ function kindBadge(step) {
 
 /** Google-Maps-style summary card + step list for a computed route. */
 export default function RouteSummary({ result, onHoverStep, onSelectStep }) {
-  const { main, comparison } = result;
+  const { main, comparison, nightComparison } = result;
   const c = main.counts;
   const isWheelchair = main.profile === "wheelchair";
 
@@ -88,6 +88,14 @@ export default function RouteSummary({ result, onHoverStep, onSelectStep }) {
   if (c.crossing) chips.push({ text: `${c.crossing} road crossing${c.crossing > 1 ? "s" : ""}`, tone: "neutral" });
   if (main.levelChanges) chips.push({ text: `${main.levelChanges} floor change${main.levelChanges > 1 ? "s" : ""}`, tone: "neutral" });
   else if ((main.levels?.length ?? 1) === 1 && main.levels?.[0] !== "0") chips.push({ text: `Stays on ${levelLabel(main.levels[0]).toLowerCase()}`, tone: "neutral" });
+  const unlitSections = main.night ? main.lighting?.sections ?? [] : [];
+  if (main.night) {
+    chips.unshift(
+      unlitSections.length
+        ? { text: `${formatDistance(main.lighting.dimM + main.lighting.darkM)} dim / dark`, tone: "warn" }
+        : { text: "Well-lit route", tone: "good" },
+    );
+  }
   const footShare = main.footM + main.roadM > 0 ? main.footM / (main.footM + main.roadM) : 0;
   chips.push({ text: footShare >= 0.6 ? "Mostly footpaths" : footShare <= 0.25 ? "Mostly along roads" : "Footpaths + roads", tone: "neutral" });
 
@@ -121,6 +129,32 @@ export default function RouteSummary({ result, onHoverStep, onSelectStep }) {
       </div>
 
       {comparisonNote && <div className="route-compare">{comparisonNote}</div>}
+
+      {main.night && nightComparison?.avoidedM > 1 && (
+        <div className="route-compare">
+          Avoids {formatDistance(nightComparison.avoidedM)} of dim or dark paths that the daytime route uses
+          {nightComparison.extraM > 1 ? ` (+${formatDistance(nightComparison.extraM)})` : ""}.
+        </div>
+      )}
+
+      {unlitSections.length > 0 && (
+        <div className="route-dark">
+          <div className="route-dark-title">
+            🌙 No fully lit route is mapped. This route still passes through {unlitSections.length === 1 ? "a dim or dark area" : `${unlitSections.length} dim or dark areas`}:
+          </div>
+          <ul>
+            {unlitSections.map((s, i) => (
+              <li key={i}>
+                <button type="button" onClick={() => onSelectStep?.({ coord: s.coord, level: s.level })}>
+                  <span className={`route-dark-badge ${s.lighting}`}>{s.lighting === "dark" ? "Dark" : "Dim"}</span>
+                  {formatDistance(s.lengthM)} of {s.label}
+                  {s.near ? ` near ${s.near}` : ""}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {main.warnings.map((w) => (
         <div key={w} className="route-warning">

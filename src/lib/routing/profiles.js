@@ -117,6 +117,24 @@ function wheelchairEdgeFactor(tags) {
   return f;
 }
 
+const DARK_VALUES = new Set(["no", "dark", "none", "off"]);
+const DIM_VALUES = new Set(["poor", "dim", "low", "limited", "weak", "bad"]);
+
+/**
+ * Lighting of a way from `lit` / `lit:perceived`: "lit" | "dim" | "dark".
+ * A way without either tag is assumed lit.
+ */
+export function lightingOf(tags = {}) {
+  const lit = tags.lit != null ? String(tags.lit).toLowerCase() : null;
+  const perceived = tags["lit:perceived"] != null ? String(tags["lit:perceived"]).toLowerCase() : null;
+  if (DARK_VALUES.has(lit) || DARK_VALUES.has(perceived)) return "dark";
+  if (DIM_VALUES.has(perceived) || lit === "limited") return "dim";
+  return "lit";
+}
+
+/** Night mode: cost multipliers that steer routes away from dim and dark ways. */
+export const NIGHT_FACTOR = { lit: 1, dim: 6, dark: 12 };
+
 /** Extra metres added when a route passes *through* a node (crossings, kerbs, barriers). */
 function nodePenalty(tags, profileId) {
   if (!tags) return 0;
@@ -160,12 +178,14 @@ export const PROFILE_RULES = {
 /**
  * Cost of traversing an edge of `length` metres with `wayTags`, arriving at a
  * node carrying `toNodeTags`. Infinity when forbidden for the profile.
+ * `opts.night` penalises dim and dark ways (never forbids them).
  */
-export function edgeCost(profileId, length, wayTags, toNodeTags) {
+export function edgeCost(profileId, length, wayTags, toNodeTags, opts = {}) {
   const rules = PROFILE_RULES[profileId] ?? PROFILE_RULES.normal;
   const tags = wayTags ?? {};
-  const f = rules.edgeFactor(tags);
+  let f = rules.edgeFactor(tags);
   if (f === FORBIDDEN) return FORBIDDEN;
+  if (opts.night) f *= NIGHT_FACTOR[lightingOf(tags)];
   const p = rules.nodePenalty(toNodeTags);
   if (p === FORBIDDEN) return FORBIDDEN;
   // Zero-length transfer edges (floor <-> connector) carry no penalty.

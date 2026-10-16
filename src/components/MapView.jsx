@@ -1,12 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
+import { createPortal } from "react-dom";
 import { createRoot } from "react-dom/client";
 import {
   ACADEMIC_AREA_CENTER,
+  AMENITY_GROUPS,
   BASEMAP_STYLE_URL,
   CAMPUS_BBOX,
   FEATURE_KINDS,
   INITIAL_ZOOM,
+  LIGHTING_COLORS,
   MAX_ZOOM,
   MIN_ZOOM,
   PATH_COLORS,
@@ -16,6 +19,7 @@ import { buildingPlace, pointPlace } from "../lib/data.js";
 import { GROUND, levelLabel } from "../lib/levels.js";
 import FeaturePopup from "./FeaturePopup.jsx";
 import QaPopup from "./QaPopup.jsx";
+import FeedbackModal from "./FeedbackModal.jsx";
 
 const EMPTY = { type: "FeatureCollection", features: [] };
 const WORLD = [
@@ -51,6 +55,40 @@ function onFloorFilter(level) {
   return ["any", ["!", ["has", "level"]], ["==", ["get", "level"], null], ["==", ["to-string", ["get", "level"]], level], ["in", ";", ["to-string", ["get", "level"]]]];
 }
 
+const AMENITY_COLOR_EXPR = ["match", ["get", "group"], ...Object.entries(AMENITY_GROUPS).flatMap(([k, v]) => [k, v.color]), "#64748b"];
+
+function AmenityPopup({ item, onFrom, onTo, onFeedback }) {
+  const g = AMENITY_GROUPS[item.group];
+  return (
+    <div className="popup">
+      <div className="popup-head">
+        <span className="popup-dot" style={{ background: g.color }} />
+        <div>
+          <div className="popup-title">{item.name}</div>
+          <div className="popup-sub">
+            {[g.label, item.category?.replaceAll("_", " "), item.level != null && item.level !== "0" ? levelLabel(item.level) : null].filter(Boolean).join(" · ")}
+          </div>
+        </div>
+      </div>
+      {item.openingHours && <div className="popup-note">Open: {item.openingHours}</div>}
+      {item.wheelchair && <div className={`popup-wc ${item.wheelchair === "yes" ? "wc-yes" : ""}`}>Wheelchair: {item.wheelchair}</div>}
+      <div className="popup-actions">
+        <button type="button" className="btn btn-from" onClick={onFrom}>
+          Directions from here
+        </button>
+        <button type="button" className="btn btn-to" onClick={onTo}>
+          Directions to here
+        </button>
+      </div>
+      <div className="popup-actions" style={{ marginTop: 6 }}>
+        <button type="button" className="btn btn-feedback" onClick={onFeedback}>
+          📝 Send Feedback
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function markerElement(kind) {
   const el = document.createElement("div");
   el.className = `pin pin-${kind}`;
@@ -70,6 +108,7 @@ export default function MapView({
   features,
   places,
   qa,
+  amenities = null,
   from,
   to,
   result,
@@ -77,6 +116,7 @@ export default function MapView({
   focus,
   level = GROUND,
   mode = "paths",
+  night = false,
   onSetFrom,
   onSetTo,
   showFeatures = true,
@@ -91,10 +131,11 @@ export default function MapView({
   const popupRootRef = useRef(null);
   const fromMarker = useRef(null);
   const toMarker = useRef(null);
-  const callbacks = useRef({ onSetFrom, onSetTo, places, level });
+  const callbacks = useRef({ onSetFrom, onSetTo, places, level, amenities });
   const [loaded, setLoaded] = useState(false);
+  const [feedbackLocation, setFeedbackLocation] = useState(null);
 
-  callbacks.current = { onSetFrom, onSetTo, places, level };
+  callbacks.current = { onSetFrom, onSetTo, places, level, amenities };
 
   // ---- create the map once ---------------------------------------------------
   useEffect(() => {
@@ -114,12 +155,15 @@ export default function MapView({
     map.addControl(new maplibregl.ScaleControl({ maxWidth: 120, unit: "metric" }), "bottom-right");
 
     map.on("load", () => {
-      for (const id of ["mask", "academic-area", "buildings", "indoor", "paths", "features", "route-compare", "route", "connectors", "snap", "step", "qa"]) {
+      for (const id of ["mask", "academic-area", "buildings", "indoor", "paths", "features", "route-compare", "route", "connectors", "snap", "step", "qa", "amenities", "route-unlit"]) {
         map.addSource(id, { type: "geojson", data: EMPTY });
       }
+      map.addSource("night", { type: "geojson", data: { type: "Feature", properties: {}, geometry: { type: "Polygon", coordinates: [WORLD] } } });
 
       // Dim everything outside the Academic Area.
       map.addLayer({ id: "mask-fill", type: "fill", source: "mask", paint: { "fill-color": "#0f172a", "fill-opacity": 0.08 } });
+      // Night mode: darken the basemap so lit / unlit paths stand out.
+      map.addLayer({ id: "night-tint", type: "fill", source: "night", layout: { visibility: "none" }, paint: { "fill-color": "#0b1026", "fill-opacity": 0.38 } });
       map.addLayer({ id: "academic-fill", type: "fill", source: "academic-area", paint: { "fill-color": "#2563eb", "fill-opacity": 0.04 } });
       map.addLayer({ id: "academic-outline", type: "line", source: "academic-area", paint: { "line-color": "#2563eb", "line-width": 2, "line-dasharray": [3, 2], "line-opacity": 0.8 } });
 
@@ -172,6 +216,19 @@ export default function MapView({
           "line-opacity": ["match", ["get", "kind"], "road", 0.55, 0.9],
         },
         layout: { "line-cap": "round", "line-join": "round" },
+      });
+      // Night mode: dim / dark paths drawn over the paths layer.
+      map.addLayer({
+        id: "paths-unlit",
+        type: "line",
+        source: "paths",
+        filter: ["!=", ["get", "lighting"], "lit"],
+        layout: { visibility: "none", "line-cap": "round", "line-join": "round" },
+        paint: {
+          "line-color": ["match", ["get", "lighting"], "dark", LIGHTING_COLORS.dark, LIGHTING_COLORS.dim],
+          "line-width": ["interpolate", ["linear"], ["zoom"], 14, 3, 18, 8],
+          "line-opacity": 0.9,
+        },
       });
       map.addLayer({
         id: "indoor-room-label",
@@ -243,6 +300,17 @@ export default function MapView({
         paint: { "line-color": PATH_COLORS.route, "line-width": ["interpolate", ["linear"], ["zoom"], 14, 4, 18, 8] },
         layout: { "line-cap": "round", "line-join": "round" },
       });
+      // Night mode: the parts of the route that are still dim or dark.
+      map.addLayer({
+        id: "route-unlit-line",
+        type: "line",
+        source: "route-unlit",
+        paint: {
+          "line-color": ["match", ["get", "lighting"], "dark", LIGHTING_COLORS.dark, LIGHTING_COLORS.dim],
+          "line-width": ["interpolate", ["linear"], ["zoom"], 14, 3, 18, 6],
+          "line-dasharray": [1.2, 1.2],
+        },
+      });
       map.addLayer({
         id: "connectors-line",
         type: "line",
@@ -290,10 +358,45 @@ export default function MapView({
         },
       });
 
+      // Amenities highlighted by a top-bar finder: pulsing halo + dot + name.
+      map.addLayer({
+        id: "amenity-halo",
+        type: "circle",
+        source: "amenities",
+        paint: { "circle-radius": ["interpolate", ["linear"], ["zoom"], 14, 9, 18, 20], "circle-color": AMENITY_COLOR_EXPR, "circle-opacity": 0.22 },
+      });
+      map.addLayer({
+        id: "amenity-point",
+        type: "circle",
+        source: "amenities",
+        paint: {
+          "circle-radius": ["interpolate", ["linear"], ["zoom"], 14, 5, 18, 10],
+          "circle-color": AMENITY_COLOR_EXPR,
+          "circle-stroke-color": "#ffffff",
+          "circle-stroke-width": ["case", ["boolean", ["get", "selected"], false], 4, 2],
+        },
+      });
+      map.addLayer({
+        id: "amenity-label",
+        type: "symbol",
+        source: "amenities",
+        minzoom: 15.5,
+        layout: {
+          "text-field": ["get", "name"],
+          "text-font": ["Noto Sans Regular"],
+          "text-size": 12,
+          "text-offset": [0, 1.2],
+          "text-anchor": "top",
+          "text-max-width": 9,
+          "text-optional": true,
+        },
+        paint: { "text-color": AMENITY_COLOR_EXPR, "text-halo-color": "#ffffff", "text-halo-width": 1.6 },
+      });
+
       // Highlighted direction step.
       map.addLayer({ id: "step-point", type: "circle", source: "step", paint: { "circle-radius": 10, "circle-color": "#1a73e8", "circle-opacity": 0.25, "circle-stroke-color": "#1a73e8", "circle-stroke-width": 2 } });
 
-      for (const id of ["features-point", "features-line", "buildings-fill", "indoor-room-fill", "qa-point"]) {
+      for (const id of ["features-point", "features-line", "buildings-fill", "indoor-room-fill", "qa-point", "amenity-point"]) {
         map.on("mouseenter", id, () => (map.getCanvas().style.cursor = "pointer"));
         map.on("mouseleave", id, () => (map.getCanvas().style.cursor = ""));
       }
@@ -338,10 +441,45 @@ export default function MapView({
     });
   }
 
+  // ---- feedback helper -----------------------------------------------------------
+  function makeFeedbackLocation(name, lat, lng) {
+    return {
+      name,
+      lat,
+      lng,
+      mapUrl: `https://www.google.com/maps?q=${lat},${lng}`,
+    };
+  }
+
   function handleClick(map, e) {
-    const { onSetFrom, onSetTo, places, level } = callbacks.current;
-    const layers = ["qa-point", "features-point", "features-line", "indoor-room-fill", "buildings-fill"].filter((id) => map.getLayer(id) && map.getLayoutProperty(id, "visibility") !== "none");
+    const { onSetFrom, onSetTo, places, level, amenities } = callbacks.current;
+    const layers = ["amenity-point", "qa-point", "features-point", "features-line", "indoor-room-fill", "buildings-fill"].filter((id) => map.getLayer(id) && map.getLayoutProperty(id, "visibility") !== "none");
     const hits = map.queryRenderedFeatures(e.point, { layers });
+
+    const amenityHit = hits.find((h) => h.layer.id === "amenity-point");
+    const item = amenityHit && amenities?.find((a) => a.id === amenityHit.properties.id);
+    if (item) {
+      openPopup(
+        map,
+        [item.lon, item.lat],
+        <AmenityPopup
+          item={item}
+          onFrom={() => {
+            onSetFrom(item);
+            closePopup();
+          }}
+          onTo={() => {
+            onSetTo(item);
+            closePopup();
+          }}
+          onFeedback={() => {
+            closePopup();
+            setFeedbackLocation(makeFeedbackLocation(item.name, item.lat, item.lon));
+          }}
+        />,
+      );
+      return;
+    }
     const feat = hits.find((h) => h.layer.id === "qa-point") ?? hits.find((h) => h.layer.id.startsWith("features")) ?? hits.find((h) => h.layer.id === "indoor-room-fill") ?? hits[0];
 
     if (feat?.layer.id === "qa-point") {
@@ -361,6 +499,9 @@ export default function MapView({
         place = pointPlace(c[0], c[1], feat.properties.name || FEATURE_KINDS[feat.properties.kind]?.label || "Feature", feat.properties.level);
       }
       const anchor = feat.geometry.type === "Point" ? feat.geometry.coordinates : [e.lngLat.lng, e.lngLat.lat];
+      const locationName = feat.properties.name || place?.name || "Location";
+      const anchorLat = anchor[1] ?? e.lngLat.lat;
+      const anchorLng = anchor[0] ?? e.lngLat.lng;
       openPopup(
         map,
         anchor,
@@ -374,6 +515,10 @@ export default function MapView({
             onSetTo(place);
             closePopup();
           }}
+          onFeedback={() => {
+            closePopup();
+            setFeedbackLocation(makeFeedbackLocation(locationName, anchorLat, anchorLng));
+          }}
         />,
       );
       return;
@@ -381,6 +526,8 @@ export default function MapView({
 
     // Plain map click: a dropped pin on the floor being viewed.
     const place = pointPlace(e.lngLat.lng, e.lngLat.lat, undefined, level);
+    const pinLat = e.lngLat.lat;
+    const pinLng = e.lngLat.lng;
     openPopup(
       map,
       e.lngLat,
@@ -396,6 +543,18 @@ export default function MapView({
           </button>
           <button type="button" className="btn btn-to" onClick={() => { onSetTo(place); closePopup(); }}>
             Directions to here
+          </button>
+        </div>
+        <div className="popup-actions" style={{ marginTop: 6 }}>
+          <button
+            type="button"
+            className="btn btn-feedback"
+            onClick={() => {
+              closePopup();
+              setFeedbackLocation(makeFeedbackLocation("Dropped Pin", pinLat, pinLng));
+            }}
+          >
+            📝 Send Feedback
           </button>
         </div>
       </div>,
@@ -440,6 +599,33 @@ export default function MapView({
     map.getSource("qa").setData(fc);
   }, [loaded, qa]);
 
+  // ---- amenity finder highlight ----------------------------------------------------------
+  const selectedId = to?.id;
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!loaded || !map) return;
+    const list = amenities ?? [];
+    map.getSource("amenities").setData({
+      type: "FeatureCollection",
+      features: list.map((a) => ({ type: "Feature", properties: { id: a.id, name: a.name, group: a.group, selected: a.id === selectedId }, geometry: { type: "Point", coordinates: [a.lon, a.lat] } })),
+    });
+  }, [loaded, amenities, selectedId]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!loaded || !map || !amenities?.length) return;
+    const pts = amenities.map((a) => [a.lon, a.lat]);
+    if (from) pts.push([from.lon, from.lat]);
+    const desktop = window.matchMedia("(min-width: 900px)").matches;
+    map.fitBounds(bboxToBounds(coordsBbox(pts)), {
+      padding: desktop ? { top: 80, bottom: 60, left: 440, right: 60 } : { top: 90, bottom: 320, left: 40, right: 40 },
+      maxZoom: 17.5,
+      duration: 700,
+    });
+    // Only when the finder opens or changes, not on every start change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loaded, amenities]);
+
   // ---- layer visibility ---------------------------------------------------------------
   useEffect(() => {
     const map = mapRef.current;
@@ -456,7 +642,10 @@ export default function MapView({
     for (const id of ["indoor-room-fill", "indoor-room-outline", "indoor-room-label"]) vis(id, pathsMode && showIndoor);
     vis("qa-point", showQa);
     vis("snap-point", showSnap);
-  }, [loaded, mode, showFeatures, showBuildings, showIndoor, showQa, showSnap]);
+    vis("night-tint", night);
+    vis("paths-unlit", night && pathsMode);
+    vis("route-unlit-line", night);
+  }, [loaded, mode, showFeatures, showBuildings, showIndoor, showQa, showSnap, night]);
 
   // ---- floor switch: re-filter indoor, features and route segments ----------------------
   useEffect(() => {
@@ -507,11 +696,12 @@ export default function MapView({
     if (!loaded || !map) return;
     closePopup();
     if (!result) {
-      for (const id of ["route", "route-compare", "connectors", "snap"]) map.getSource(id).setData(EMPTY);
+      for (const id of ["route", "route-compare", "connectors", "snap", "route-unlit"]) map.getSource(id).setData(EMPTY);
       return;
     }
     const { main, comparison } = result;
     map.getSource("route").setData(main.segments ?? main.line);
+    map.getSource("route-unlit").setData(main.unlit ?? EMPTY);
     map.getSource("connectors").setData(main.connectors);
     map.getSource("snap").setData(main.snapPoints ?? EMPTY);
     map.getSource("route-compare").setData(comparison && !comparison.sameAsMain ? comparison.line : EMPTY);
@@ -542,5 +732,16 @@ export default function MapView({
     if (focus.issue) openPopup(map, focus.coord, <QaPopup issue={focus.issue} />);
   }, [loaded, focus]);
 
-  return <div ref={containerRef} className="map" role="application" aria-label="Map of IIT Kanpur" />;
+  return (
+    <>
+      <div ref={containerRef} className="map" role="application" aria-label="Map of IIT Kanpur" />
+      {feedbackLocation && createPortal(
+        <FeedbackModal
+          location={feedbackLocation}
+          onClose={() => setFeedbackLocation(null)}
+        />,
+        document.body
+      )}
+    </>
+  );
 }

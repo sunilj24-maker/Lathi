@@ -145,6 +145,7 @@ export function buildDirections(graph, nodeIds, wayIds, names = {}) {
   // The route may start on a transfer edge that was skipped above, so take the
   // floor from the true first node, then the first floor node along the path.
   const hinted = names.startLevel != null && !String(names.startLevel).includes(";") ? String(names.startLevel) : null;
+  const hintedEnd = names.endLevel != null && !String(names.endLevel).includes(";") ? String(names.endLevel) : null;
   let currentLevel = floorOf(nodeIds[0]) ?? hinted ?? nodeIds.map(floorOf).find((l) => l != null) ?? "0";
   for (const leg of legs) {
     leg.levelBefore = currentLevel;
@@ -168,7 +169,7 @@ export function buildDirections(graph, nodeIds, wayIds, names = {}) {
         }
       }
     }
-    if (found == null) found = floorOf(nodeIds[nodeIds.length - 1]) ?? legs[i].levelAfter;
+    if (found == null) found = floorOf(nodeIds[nodeIds.length - 1]) ?? hintedEnd ?? legs[i].levelAfter;
     legs[i].levelAfter = found;
   }
   // Propagate so each leg starts on the floor the previous one ended on.

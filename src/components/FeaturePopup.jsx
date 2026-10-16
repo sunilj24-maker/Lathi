@@ -15,7 +15,7 @@ function parseTags(props) {
 }
 
 /** Popup body for an accessibility feature or a building. */
-export default function FeaturePopup({ feature, onFrom, onTo }) {
+export default function FeaturePopup({ feature, onFrom, onTo, onFeedback }) {
   const props = feature.properties ?? {};
   const isBuilding = Boolean(props.building);
   const tags = parseTags(props);
@@ -90,6 +90,13 @@ export default function FeaturePopup({ feature, onFrom, onTo }) {
               Directions to here
             </button>
           )}
+        </div>
+      )}
+      {onFeedback && (
+        <div className="popup-actions" style={{ marginTop: 6 }}>
+          <button type="button" className="btn btn-feedback" onClick={onFeedback}>
+            📝 Send Feedback
+          </button>
         </div>
       )}
     </div>

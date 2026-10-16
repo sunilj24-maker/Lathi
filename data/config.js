@@ -89,10 +89,30 @@ export const PATH_COLORS = {
   road: "rgb(122, 198, 255)", // roads are ground paths too, drawn thinner
 };
 
-/** Map layer modes offered by the layer picker. */
+/** Night mode: colours for dim / dark paths (lit:perceived / lit=no). */
+export const LIGHTING_COLORS = {
+  dim: "#a16207",
+  dark: "#111827",
+};
+
+/** Map layer modes offered by the layer picker. Only Buildings mode is exposed in the UI. */
 export const MAP_MODES = [
   { id: "buildings", label: "Buildings", hint: "Base map with building names only" },
   { id: "paths", label: "Paths", hint: "Every walkable path, coloured by floor" },
+];
+
+/** Amenity groups shown by the top-bar finders (built into public/data/amenities.json). */
+export const AMENITY_GROUPS = {
+  water: { label: "Drinking water", color: "#0284c7", icon: "💧" },
+  toilets: { label: "Toilets", color: "#7c3aed", icon: "🚻" },
+  food: { label: "Food & refreshments", color: "#ea580c", icon: "🍴" },
+};
+
+/** Top-bar finder buttons and the amenity groups each one highlights. */
+export const AMENITY_FINDERS = [
+  { id: "water", label: "Water", icon: "💧", groups: ["water"] },
+  { id: "toilets", label: "Toilets", icon: "🚻", groups: ["toilets"] },
+  { id: "food", label: "Food & Refreshments", icon: "🍴", groups: ["food"] },
 ];
 
 /** Accessibility feature kinds we classify from OSM tags, with display styling. */
