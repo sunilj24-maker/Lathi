@@ -204,8 +204,8 @@ export default function App() {
         counts={amenityCounts}
         night={night}
         onNight={handleNight}
-        lang={lang}
-        onLang={handleLang}
+       // lang={lang}
+        //onLang={handleLang}
         onFinder={(id) => {
           setFinder(id);
           setNearestError(null);
